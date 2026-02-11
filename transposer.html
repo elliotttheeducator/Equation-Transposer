@@ -5,13 +5,18 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Drag Equation Transposer</title>
 
-  <!-- Nerdamer -->
-  <script src="./vendor/all.min.js"></script>
+ <!-- Nerdamer (local) -->
+<script src="./vendor/all.min.js?v=1"></script>
+<script>
+  console.log("Nerdamer loaded?", typeof window.nerdamer);
+</script>
 
-
-  <!-- KaTeX (pretty math) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+<!-- KaTeX (local) -->
+<link rel="stylesheet" href="./vendor/katex.min.css?v=1">
+<script src="./vendor/katex.min.js?v=1"></script>
+<script>
+  console.log("KaTeX loaded?", typeof window.katex);
+</script>
 
   <style>
     :root{
@@ -724,4 +729,5 @@ boot();
 </script>
 </body>
 </html>
+
 
