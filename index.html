@@ -3,23 +3,23 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Drag Equation Transposer (Legal Moves)</title>
+  <title>Equation Transposer (Tiles)</title>
 
   <!-- Nerdamer (LOCAL) -->
   <script src="./vendor/all.min.js"></script>
 
-  <!-- MathLive (CDN) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive.core.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive.css">
-  <script src="https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive.min.js"></script>
+  <!-- KaTeX (CDN) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
 
   <style>
     :root{
       --bg:#0b1220;
       --card:rgba(255,255,255,.06);
       --stroke:rgba(255,255,255,.12);
-      --text:rgba(255,255,255,.92);
+      --text:rgba(255,255,255,.96);
       --muted:rgba(255,255,255,.65);
+      --accent:#7c5cff;
       --ok:#34d399;
       --bad:#ff4d6d;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -37,16 +37,7 @@
         var(--bg);
     }
     .wrap{max-width:1200px;margin:0 auto;padding:18px 14px 26px}
-    .card{
-      border:1px solid var(--stroke);
-      background:linear-gradient(180deg, var(--card), rgba(255,255,255,.04));
-      border-radius:16px;
-      box-shadow:0 10px 30px rgba(0,0,0,.28);
-      backdrop-filter: blur(10px);
-    }
-    .pad{padding:12px}
-
-    header{display:flex;justify-content:space-between;gap:10px;align-items:flex-end;margin-bottom:10px;flex-wrap:wrap}
+    header{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px}
     h1{margin:0;font-size:18px}
     .sub{margin:0;color:var(--muted);font-size:12.5px;line-height:1.25}
     .pill{
@@ -57,6 +48,15 @@
       font-size:12px;color:var(--muted);font-family:var(--mono);
     }
 
+    .card{
+      border:1px solid var(--stroke);
+      background:linear-gradient(180deg, var(--card), rgba(255,255,255,.04));
+      border-radius:16px;
+      box-shadow:0 10px 30px rgba(0,0,0,.28);
+      backdrop-filter: blur(10px);
+    }
+    .pad{padding:12px}
+
     .topbar{display:grid;grid-template-columns:1fr auto;gap:12px;margin-bottom:12px}
     .actions{display:flex;flex-direction:column;gap:10px}
     .btn{
@@ -64,56 +64,125 @@
       background:rgba(255,255,255,.08);
       color:var(--text);
       padding:10px 12px;border-radius:12px;
-      cursor:pointer;font-weight:700;font-size:13px;text-align:center;
+      cursor:pointer;font-weight:800;font-size:13px;text-align:center;
       user-select:none;
     }
     .btn:hover{background:rgba(255,255,255,.12)}
+    .btn.primary{
+      border-color: rgba(124,92,255,.5);
+      background: linear-gradient(180deg, rgba(124,92,255,.35), rgba(124,92,255,.18));
+    }
     .btn.danger{
       border-color: rgba(255,77,109,.5);
       background: linear-gradient(180deg, rgba(255,77,109,.30), rgba(255,77,109,.12));
     }
-    .btn.primary{
-      border-color: rgba(124,92,255,.5);
-      background: linear-gradient(180deg, rgba(124,92,255,.35), rgba(124,92,255,.18));
+
+    textarea{
+      width:100%;
+      border:1px solid var(--stroke);
+      background:rgba(0,0,0,.20);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:12px;
+      outline:none;
+      font-size:14px;
+      font-family:var(--mono);
+      min-height:64px;
+      resize:vertical;
     }
 
     .status{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--muted)}
     .dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.35)}
     .dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)}
 
-    .bigEq{height:70vh;display:flex;align-items:center;justify-content:center;padding:16px;overflow:hidden}
+    /* MASSIVE floating equation box */
+    .bigEq{height:70vh;display:flex;align-items:center;justify-content:center;padding:16px}
     .eqBox{
-      width:100%;height:100%;
-      border-radius:18px;border:1px solid rgba(255,255,255,.10);
+      width:100%;
+      height:100%;
+      border-radius:18px;
+      border:1px solid rgba(255,255,255,.10);
       background:rgba(0,0,0,.18);
-      display:flex;align-items:center;justify-content:center;
       padding:18px;
-      position:relative;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      user-select:none; /* no selectable text */
+      overflow:auto;
     }
-    .eqRow{display:flex;align-items:center;justify-content:center;gap:14px;width:100%;max-width:1120px}
-    .eqEq{
+
+    .eqRow{
+      width:min(1100px, 100%);
+      display:grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap:18px;
+      align-items:center;
+    }
+    .eqSign{
       font-family:var(--mono);
-      font-size: clamp(28px, 4vw, 64px);
-      color: rgba(255,255,255,.70);
+      font-weight:900;
+      font-size: clamp(34px, 4vw, 74px);
+      color: rgba(255,255,255,.82);
       user-select:none;
     }
-    math-field.big{
-      flex:1 1 0;min-width:280px;
+
+    .side{
+      min-height: 120px;
       border:1px solid rgba(255,255,255,.12);
       background:rgba(0,0,0,.12);
+      border-radius:16px;
+      padding:14px 14px;
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+      justify-content:center;
+      position:relative;
+      user-select:none;
+    }
+    .side.dropActive{
+      outline:2px solid rgba(124,92,255,.55);
+      background:rgba(124,92,255,.10);
+    }
+
+    /* Tiles */
+    .tile{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:10px 12px;
       border-radius:14px;
-      padding:12px 14px;
-      font-size: clamp(26px, 3.6vw, 56px);
-      --caret-color: rgba(255,255,255,.95);
-      --selection-background-color: rgba(124,92,255,.25);
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.06);
+      cursor:grab;
+      user-select:none;
+      box-shadow:0 8px 18px rgba(0,0,0,.25);
+      transition: transform .06s ease, background .15s ease, border-color .15s ease;
+      font-weight:900;
+      color: rgba(255,255,255,.96);
     }
-    @media (max-width: 980px){
-      .topbar{grid-template-columns:1fr}
-      .actions{flex-direction:row;flex-wrap:wrap}
-      .eqRow{flex-direction:column}
-      .eqEq{display:none}
-      math-field.big{width:100%}
+    .tile:hover{
+      border-color: rgba(255,255,255,.18);
+      background:rgba(255,255,255,.09);
     }
+    .tile:active{cursor:grabbing; transform: translateY(1px);}
+
+    /* Operators (not draggable) */
+    .op{
+      font-family:var(--mono);
+      font-weight:900;
+      color: rgba(255,255,255,.80);
+      font-size: clamp(20px, 2.4vw, 40px);
+      user-select:none;
+      opacity:.85;
+    }
+
+    /* KaTeX color + weight */
+    .tile .katex{ color: rgba(255,255,255,.98); font-weight:900; }
+    .tile .katex *{ color: rgba(255,255,255,.98); }
+    .tile .katex{ font-size: clamp(20px, 2.6vw, 44px); }
+
+    .op .katex{ color: rgba(255,255,255,.90); font-weight:900; }
 
     .dragPreview{
       position:fixed;left:0;top:0;
@@ -129,187 +198,92 @@
       font-size:26px;
       max-width:min(80vw, 980px);
       white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      user-select:none;
     }
 
-    .debug{
-      margin-top:8px;padding:10px;border-radius:12px;
-      border:1px solid rgba(255,255,255,.10);
-      background:rgba(0,0,0,.18);
-      font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.8);
+    @media (max-width: 980px){
+      .topbar{grid-template-columns:1fr}
+      .actions{flex-direction:row;flex-wrap:wrap}
+      .eqRow{grid-template-columns: 1fr; gap:12px;}
+      .eqSign{display:none}
     }
   </style>
 </head>
 
 <body>
-  <div class="wrap">
-    <header>
-      <div>
-        <h1>Drag Equation Transposer</h1>
-        <p class="sub">
-          Select a <b>top-level term</b> or <b>top-level factor</b>, then drag it across <span style="font-family:var(--mono)">=</span>.
-          Internal pieces (e.g. <span style="font-family:var(--mono)">-v_i</span> inside <span style="font-family:var(--mono)">(v_f-v_i)</span>) are <b>illegal</b>.
-        </p>
-      </div>
-      <div class="pill">Mode: <span id="modeText">Auto</span></div>
-    </header>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Drag Equation Transposer</h1>
+      <p class="sub">
+        Drag <b>tiles</b> across <span style="font-family:var(--mono)">=</span>.
+        Only <b>top-level</b> terms/factors can move. Internal pieces are illegal (snap back).
+      </p>
+    </div>
+    <div class="pill">View: <span id="viewMode">Auto</span></div>
+  </header>
 
-    <div class="topbar">
-      <div class="card pad">
-        <div class="sub" style="margin:0 0 8px">
-          Start equation is: <span style="font-family:var(--mono)">a=(v_f-v_i)/t</span>
-          (subscripts render nicely as <span style="font-family:var(--mono)">v_{f}</span>, <span style="font-family:var(--mono)">v_{i}</span>)
-        </div>
-        <div class="status">
-          <span class="dot" id="statusDot"></span>
-          <span id="statusText">Booting…</span>
-        </div>
-        <div class="debug" id="debugText">—</div>
+  <div class="topbar">
+    <div class="card pad">
+      <div class="sub" style="margin:0 0 8px">
+        Enter an equation using <span style="font-family:var(--mono)">=</span>. Subscripts: <span style="font-family:var(--mono)">v_f</span>, <span style="font-family:var(--mono)">v_i</span>.
       </div>
-      <div class="actions">
-        <div class="btn primary" id="btnLoad">Load default</div>
-        <div class="btn" id="btnUndo">Undo</div>
-        <div class="btn danger" id="btnReset">Reset</div>
+      <textarea id="eqInput">a=(v_f-v_i)/t</textarea>
+      <div class="status">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">Booting…</span>
       </div>
     </div>
-
-    <div class="card bigEq">
-      <div class="eqBox" id="eqBox">
-        <div class="eqRow">
-          <math-field id="mfL" class="big"></math-field>
-          <div class="eqEq" id="eqMid">=</div>
-          <math-field id="mfR" class="big"></math-field>
-        </div>
-      </div>
+    <div class="actions">
+      <div class="btn primary" id="btnLoad">Load</div>
+      <div class="btn" id="btnUndo">Undo</div>
+      <div class="btn danger" id="btnReset">Reset</div>
     </div>
-
-    <div class="dragPreview" id="dragPreview"></div>
   </div>
 
-<script>
-/** Optional: suppress noisy Chrome ResizeObserver warning */
-window.addEventListener('error', (e) => {
-  if (String(e.message || '').includes('ResizeObserver loop')) e.stopImmediatePropagation();
-}, true);
+  <div class="card bigEq">
+    <div class="eqBox">
+      <div class="eqRow">
+        <div class="side" id="lhsSide" aria-label="Left side"></div>
+        <div class="eqSign">=</div>
+        <div class="side" id="rhsSide" aria-label="Right side"></div>
+      </div>
+    </div>
+  </div>
 
+  <div class="dragPreview" id="dragPreview"></div>
+</div>
+
+<script>
 const $ = (id) => document.getElementById(id);
 
 function setStatus(ok, msg){
   $("statusDot").className = "dot " + (ok ? "ok" : "bad");
   $("statusText").textContent = msg;
 }
-function dbg(msg){ $("debugText").textContent = msg; }
+function uniq(arr){ return [...new Set(arr)]; }
 
-async function waitForMathField(){
-  if (customElements.get("math-field")) return;
-  await customElements.whenDefined("math-field");
-}
-async function waitForNerdamer(timeoutMs=6000){
-  const t0 = Date.now();
-  while(!window.nerdamer){
-    if(Date.now() - t0 > timeoutMs) throw new Error("Nerdamer not loaded. Check ./vendor/all.min.js path.");
-    await new Promise(r => setTimeout(r, 50));
-  }
-}
-
-/** -----------------------------
- *  Engine helpers (Nerdamer)
- * ------------------------------*/
+/* ---------- Nerdamer ---------- */
 function nerd(expr){ return window.nerdamer(expr); }
 
-/** Keep expressions stable: avoid expand() unless asked */
+// keep expressions stable-ish without auto expanding
 function canonical(expr){
   return nerd(expr).simplify().toString();
 }
 
-/** -----------------------------
- *  LaTeX -> engine string (minimal, robust for our use)
- *  Supports: variables, subscripts, parentheses, + - * /, \frac
- * ------------------------------*/
-function stripLatexNoise(lx){
-  return String(lx)
-    .replace(/\\left/g,'')
-    .replace(/\\right/g,'')
-    .replace(/\\,/g,'')
-    .replace(/\s+/g,' ')
-    .trim();
+// nerdamer -> latex (best effort)
+function toLatex(expr){
+  const n = nerd(expr);
+  if (typeof n.toTeX === "function") return n.toTeX();
+  if (typeof n.text === "function") return n.text("latex");
+  return String(n.toString());
 }
 
-function latexSubscriptsToUnderscore(lx){
-  // v_{f} -> v_f
-  return lx.replace(/([A-Za-z])_\{([^}]+)\}/g, (_, a, b) => `${a}_${b}`);
-}
-
-/** Convert \frac{A}{B} to (A)/(B) recursively */
-function latexFracToSlash(lx){
-  let s = lx;
-
-  function parseGroup(str, i){
-    // expects str[i] == '{'
-    let depth = 0;
-    let start = i;
-    for(; i < str.length; i++){
-      if(str[i] === '{') depth++;
-      else if(str[i] === '}'){
-        depth--;
-        if(depth === 0){
-          return { content: str.slice(start+1, i), end: i+1 };
-        }
-      }
-    }
-    return null;
-  }
-
-  while(true){
-    const idx = s.indexOf('\\frac');
-    if(idx < 0) break;
-    let i = idx + 5;
-    while(s[i] === ' ') i++;
-    if(s[i] !== '{') break;
-    const g1 = parseGroup(s, i);
-    if(!g1) break;
-    i = g1.end;
-    while(s[i] === ' ') i++;
-    if(s[i] !== '{') break;
-    const g2 = parseGroup(s, i);
-    if(!g2) break;
-
-    const A = latexFracToSlash(g1.content);
-    const B = latexFracToSlash(g2.content);
-    const rep = `((${A}))/(((${B})))`;
-
-    s = s.slice(0, idx) + rep + s.slice(g2.end);
-  }
-  return s;
-}
-
-function latexToEngine(latex){
-  let s = stripLatexNoise(latex);
-  s = latexSubscriptsToUnderscore(s);
-  s = latexFracToSlash(s);
-  s = s
-    .replace(/\\cdot/g,'*')
-    .replace(/\\times/g,'*')
-    .replace(/\\div/g,'/')
-    .replace(/[{}]/g,'')              // after frac conversion, remaining braces are usually safe to drop
-    .replace(/\\,/g,'')
-    .replace(/\s+/g,'')
-    ;
-
-  // common latex minus is just '-'; keep
-  // implicit multiplication: we do NOT attempt full implicit parse.
-  // Students should select complete top-level pieces; engine side is managed by us.
-  return s;
-}
-
-/** -----------------------------
- *  Top-level decomposition (string-based, paren depth)
- * ------------------------------*/
+/* ---------- Parsing (top-level only) ---------- */
 function splitTopLevelAdd(expr){
   const s = canonical(expr);
   const out = [];
-  let depth = 0;
-  let buf = "";
-  let sign = +1;
+  let depth = 0, buf = "", sign = +1;
 
   function flush(){
     const t = buf.trim();
@@ -334,11 +308,8 @@ function splitTopLevelAdd(expr){
 
 function splitTopLevelMul(expr){
   const s = canonical(expr);
-  let depth = 0;
-  let buf = "";
-  let mode = "num";
-  const num = [];
-  const den = [];
+  let depth = 0, buf = "", mode = "num";
+  const num = [], den = [];
 
   function flush(){
     const t = buf.trim();
@@ -358,315 +329,258 @@ function splitTopLevelMul(expr){
     }
   }
   flush();
-
   if(num.length === 0 && den.length === 0) return { num:[s.trim()], den:[] };
   if(num.length === 0) num.push("1");
   return { num, den };
 }
 
-/** -----------------------------
- *  State + rendering
- * ------------------------------*/
-let original = null;
-let current = null;
-let history = [];
+/* ---------- State ---------- */
+let state = {
+  original: null,
+  current: null,
+  history: []
+};
 
-function push(desc){
-  history.push({ L: current.L, R: current.R, desc });
+function pushHistory(desc){
+  state.history.push({ L: state.current.L, R: state.current.R, desc });
 }
-function syncFields(){
-  const mfL = $("mfL"), mfR = $("mfR");
-  mfL.setValue(nerd(current.L).toTeX ? nerd(current.L).toTeX() : nerd(current.L).text("latex"), {format:"latex"});
-  mfR.setValue(nerd(current.R).toTeX ? nerd(current.R).toTeX() : nerd(current.R).text("latex"), {format:"latex"});
-  dbg(`${current.L} = ${current.R}   | steps: ${Math.max(0, history.length-1)}`);
-}
+
 function undo(){
-  if(history.length <= 1){ setStatus(false, "Nothing to undo."); return; }
-  history.pop();
-  const prev = history[history.length-1];
-  current = { L: prev.L, R: prev.R };
-  syncFields();
+  if(state.history.length <= 1){ setStatus(false, "Nothing to undo."); return; }
+  state.history.pop();
+  const prev = state.history[state.history.length - 1];
+  state.current = { L: prev.L, R: prev.R };
+  render();
   setStatus(true, "Undone.");
 }
+
 function reset(){
-  if(!original){ setStatus(false, "Not ready."); return; }
-  current = { ...original };
-  history = [];
-  push("Reset");
-  syncFields();
+  if(!state.original){ setStatus(false, "Load an equation first."); return; }
+  state.current = { ...state.original };
+  state.history = [];
+  pushHistory("Reset");
+  render();
   setStatus(true, "Reset.");
 }
-function loadDefault(){
-  // keep RHS as single fraction; don't auto-expand
-  original = { L: canonical("a"), R: canonical("((v_f-v_i)/t)") };
-  current  = { ...original };
-  history  = [];
-  push("Loaded default");
-  syncFields();
-  setStatus(true, "Loaded. Select a top-level term/factor and drag across =");
+
+function splitEquation(eqStr){
+  const s = String(eqStr).replace(/\s+/g,"").trim();
+  const idx = s.indexOf("=");
+  if(idx < 0) throw new Error("Equation must contain '='");
+  const L = s.slice(0, idx);
+  const R = s.slice(idx+1);
+  if(!L || !R) throw new Error("Both sides must be non-empty");
+  return { L, R };
 }
 
-/** -----------------------------
- *  Legality checking + move application
- * ------------------------------*/
-function sideOfField(mf){ return (mf === $("mfL")) ? "L" : "R"; }
-function otherSide(side){ return side === "L" ? "R" : "L"; }
+function load(){
+  if(!window.nerdamer) throw new Error("Nerdamer not loaded (check ./vendor/all.min.js)");
+  if(!window.katex) throw new Error("KaTeX not loaded (CDN blocked?)");
 
-function getSideExpr(side){ return side === "L" ? current.L : current.R; }
-function setSideExpr(side, expr){
-  if(side === "L") current.L = expr;
-  else current.R = expr;
+  const raw = $("eqInput").value;
+  const { L, R } = splitEquation(raw);
+
+  // validate parse
+  nerd(L); nerd(R);
+
+  state.original = { L: canonical(L), R: canonical(R) };
+  state.current  = { ...state.original };
+  state.history  = [];
+  pushHistory("Loaded");
+  render();
+  setStatus(true, "Loaded. Drag tiles across '='.");
 }
 
-function illegal(msg){
-  // snap back to last valid
-  syncFields();
-  setStatus(false, msg);
+/* ---------- Rendering as tiles ---------- */
+function clear(el){ while(el.firstChild) el.removeChild(el.firstChild); }
+
+function katexNode(latex, cls){
+  const span = document.createElement("span");
+  if(cls) span.className = cls;
+  katex.render(latex, span, { throwOnError:false, strict:"ignore" });
+  return span;
 }
 
-function legal(msg){
-  push(msg);
-  syncFields();
-  setStatus(true, msg);
-}
-
-/**
- * Determine if selection is a legal "top-level unit" on that side:
- * - term: matches one of top-level add/sub terms (including sign)
- * - factor-num/factor-den: matches one of top-level mul/div factors in num/den
- */
-function classifySelectionOnSide(selExprEngine, side){
-  const sideExpr = getSideExpr(side);
-
-  // Canonicalise selection
-  let selCan;
-  try { selCan = canonical(selExprEngine); }
-  catch { return { ok:false, reason:"Selection not parseable." }; }
-
-  // 1) Terms
-  const terms = splitTopLevelAdd(sideExpr).map(t => {
-    const signed = (t.sign === 1) ? `(${t.text})` : `-(${t.text})`;
-    return canonical(signed);
+function tile(payload, latex){
+  const div = document.createElement("div");
+  div.className = "tile";
+  div.draggable = true;
+  div.dataset.payload = JSON.stringify(payload);
+  div.appendChild(katexNode(latex));
+  div.addEventListener("dragstart", (e) => {
+    e.dataTransfer.setData("text/plain", div.dataset.payload);
+    showDragPreview(latex);
   });
-  if(terms.includes(selCan)){
-    return { ok:true, kind:"term", expr: selCan };
+  div.addEventListener("dragend", () => hideDragPreview());
+  return div;
+}
+
+function op(text){
+  const span = document.createElement("span");
+  span.className = "op";
+  span.textContent = text;
+  return span;
+}
+
+// If >1 top-level add term -> render terms (each term tile includes its sign).
+// Else render factors of the single term (num tiles + optional denom tiles with ÷).
+function renderSide(sideEl, sideName, expr){
+  clear(sideEl);
+
+  const terms = splitTopLevelAdd(expr);
+
+  if(terms.length > 1){
+    $("viewMode").textContent = "Terms";
+    // build signed term tiles
+    terms.forEach((t, idx) => {
+      const signed = (t.sign === 1) ? `(${t.text})` : `-(${t.text})`;
+      const can = canonical(signed);
+      const latex = toLatex(can);
+
+      const payload = { kind:"term", from: sideName, expr: can };
+      sideEl.appendChild(tile(payload, latex));
+    });
+    return;
   }
 
-  // 2) Factors (num/den)
-  const f = splitTopLevelMul(sideExpr);
+  // single term: show factor view
+  $("viewMode").textContent = "Factors";
+  const f = splitTopLevelMul(expr);
   const num = f.num.map(x => canonical(x));
   const den = f.den.map(x => canonical(x));
 
-  if(num.includes(selCan)) return { ok:true, kind:"factor", where:"num", expr: selCan };
-  if(den.includes(selCan)) return { ok:true, kind:"factor", where:"den", expr: selCan };
+  // numerator tiles
+  num.forEach((x, i) => {
+    if(i>0) sideEl.appendChild(op("×"));
+    const payload = { kind:"factor", from: sideName, where:"num", expr: x };
+    sideEl.appendChild(tile(payload, toLatex(x)));
+  });
 
-  // Not top-level
-  return {
-    ok:false,
-    reason:"Illegal: selection is not a top-level term/factor on that side (it’s inside a group)."
-  };
+  // denominator tiles (keep as single denominator factors, not expanded)
+  den.forEach((x, i) => {
+    sideEl.appendChild(op("÷"));
+    const payload = { kind:"factor", from: sideName, where:"den", expr: x };
+    sideEl.appendChild(tile(payload, toLatex(x)));
+  });
 }
 
-/** Apply transpose across '=' */
-function transpose(classification, fromSide, toSide){
-  // term move: subtract that signed term from both sides (cancels at source)
-  if(classification.kind === "term"){
-    const e = classification.expr; // signed term, canonical
-    const L = canonical(`(${current.L}) - (${e})`);
-    const R = canonical(`(${current.R}) - (${e})`);
-    current = { L, R };
-    legal(`Moved term across = (legal top-level term).`);
+function render(){
+  if(!state.current) return;
+  renderSide($("lhsSide"), "L", state.current.L);
+  renderSide($("rhsSide"), "R", state.current.R);
+}
+
+/* ---------- Legality + move rules ---------- */
+/*
+Legal move = you can only move what is already a rendered tile.
+So “-v_i inside (v_f - v_i)” is never a tile when it’s inside a numerator group.
+If a student tries to highlight/select it: impossible (text isn’t selectable).
+If they try to drag something else: only tile payloads exist.
+*/
+
+function applyMove(payload, toSide){
+  const fromSide = payload.from;
+  if(fromSide === toSide){
+    setStatus(false, "Drop on the other side of '=' to transpose.");
+    render(); // snap back
+    return;
+  }
+
+  // term move: subtract term from both sides
+  if(payload.kind === "term"){
+    const t = payload.expr; // already signed
+    const L = canonical(`(${state.current.L}) - (${t})`);
+    const R = canonical(`(${state.current.R}) - (${t})`);
+    state.current = { L, R };
+    pushHistory("Moved term (legal top-level term).");
+    render();
+    setStatus(true, "Moved term.");
     return;
   }
 
   // factor move:
-  // If factor is in numerator on source side -> divide both sides by factor
-  // If factor is in denominator on source side -> multiply both sides by factor
-  if(classification.kind === "factor"){
-    const f = classification.expr;
-    let L, R;
-    if(classification.where === "num"){
-      L = canonical(`(${current.L})/(${f})`);
-      R = canonical(`(${current.R})/(${f})`);
-      current = { L, R };
-      legal(`Moved numerator factor across = (divide both sides).`);
+  // numerator factor -> divide both sides
+  // denominator factor -> multiply both sides
+  if(payload.kind === "factor"){
+    const f = payload.expr;
+    if(payload.where === "num"){
+      const L = canonical(`(${state.current.L})/(${f})`);
+      const R = canonical(`(${state.current.R})/(${f})`);
+      state.current = { L, R };
+      pushHistory("Moved numerator factor (divide both sides).");
+      render();
+      setStatus(true, "Moved factor.");
       return;
     }
-    if(classification.where === "den"){
-      L = canonical(`(${current.L})*(${f})`);
-      R = canonical(`(${current.R})*(${f})`);
-      current = { L, R };
-      legal(`Moved denominator factor across = (multiply both sides).`);
+    if(payload.where === "den"){
+      const L = canonical(`(${state.current.L})*(${f})`);
+      const R = canonical(`(${state.current.R})*(${f})`);
+      state.current = { L, R };
+      pushHistory("Moved denominator factor (multiply both sides).");
+      render();
+      setStatus(true, "Moved factor.");
       return;
     }
   }
 
-  illegal("Illegal move.");
+  setStatus(false, "Illegal move.");
+  render();
 }
 
-/** -----------------------------
- *  Drag UX from equation selection
- * ------------------------------*/
-let drag = {
-  active:false,
-  fromSide:null,
-  selectionLatex:"",
-  selectionEngine:"",
-  classification:null
-};
-
-function showDragPreview(text){
-  const el = $("dragPreview");
-  el.textContent = text || "";
-  el.style.transform = `translate(-9999px,-9999px)`;
-}
-function moveDragPreview(x, y){
-  $("dragPreview").style.transform = `translate(${x+18}px, ${y+18}px)`;
-}
-function hideDragPreview(){
-  $("dragPreview").style.transform = `translate(-9999px,-9999px)`;
-}
-
-function getSelectedLatex(mf){
-  // Modern API: mf.getValue(mf.selection) returns latex fragment of selection. :contentReference[oaicite:0]{index=0}
-  try{
-    const sel = mf.selection;
-    if(!sel) return "";
-    // selection is an array of ranges; pass it directly
-    return mf.getValue(sel);
-  } catch {
-    return "";
-  }
-}
-
-function beginDragFrom(mf, clientX, clientY){
-  const side = sideOfField(mf);
-
-  // if no selection, don't drag
-  const selectedLatex = getSelectedLatex(mf);
-  if(!selectedLatex || !selectedLatex.trim()){
-    return;
-  }
-
-  const selEngine = latexToEngine(selectedLatex);
-  if(!selEngine){
-    illegal("Selection empty.");
-    return;
-  }
-
-  const cls = classifySelectionOnSide(selEngine, side);
-  if(!cls.ok){
-    drag.active = false;
-    illegal(cls.reason);
-    return;
-  }
-
-  drag.active = true;
-  drag.fromSide = side;
-  drag.selectionLatex = selectedLatex;
-  drag.selectionEngine = selEngine;
-  drag.classification = cls;
-
-  $("modeText").textContent = (cls.kind === "term") ? "Term" : (cls.where === "den" ? "Den factor" : "Num factor");
-
-  showDragPreview(selectedLatex.replace(/\s+/g,' ').trim());
-  moveDragPreview(clientX, clientY);
-  setStatus(true, "Dragging… drop on the other side.");
-}
-
-function endDragAt(clientX, clientY){
-  if(!drag.active) return;
-
-  // decide target side by x position relative to the '=' center
-  const mid = $("eqMid").getBoundingClientRect();
-  const toSide = (clientX < (mid.left + mid.right)/2) ? "L" : "R";
-  const fromSide = drag.fromSide;
-
-  hideDragPreview();
-
-  // must drop on opposite side to be a transpose
-  if(toSide === fromSide){
-    drag.active = false;
-    illegal("Drop on the other side of '=' to transpose.");
-    return;
-  }
-
-  // apply move (already classified as legal top-level unit)
-  try{
-    transpose(drag.classification, fromSide, toSide);
-  } catch(e){
-    drag.active = false;
-    illegal("Move failed: " + (e.message || String(e)));
-    return;
-  }
-
-  drag.active = false;
-}
-
-function attachDragHandlers(mf){
-  mf.addEventListener("pointerdown", (e) => {
-    // let selection happen first; start drag only if selection exists
-    // we start on pointermove threshold
-    const startX = e.clientX, startY = e.clientY;
-    const startSide = sideOfField(mf);
-
-    let moved = false;
-
-    function onMove(ev){
-      const dx = Math.abs(ev.clientX - startX);
-      const dy = Math.abs(ev.clientY - startY);
-      if(!moved && (dx + dy) > 6){
-        moved = true;
-        beginDragFrom(mf, ev.clientX, ev.clientY);
-      }
-      if(drag.active) moveDragPreview(ev.clientX, ev.clientY);
+/* ---------- Drop zones ---------- */
+function enableDrops(zoneEl, toSide){
+  zoneEl.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    zoneEl.classList.add("dropActive");
+    moveDragPreview(e.clientX, e.clientY);
+  });
+  zoneEl.addEventListener("dragleave", () => zoneEl.classList.remove("dropActive"));
+  zoneEl.addEventListener("drop", (e) => {
+    e.preventDefault();
+    zoneEl.classList.remove("dropActive");
+    hideDragPreview();
+    const raw = e.dataTransfer.getData("text/plain");
+    if(!raw) return;
+    try{
+      applyMove(JSON.parse(raw), toSide);
+    } catch(err){
+      setStatus(false, "Drop failed.");
+      render();
     }
-    function onUp(ev){
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      endDragAt(ev.clientX, ev.clientY);
-    }
-
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
   });
 }
 
-/** -----------------------------
- *  Boot
- * ------------------------------*/
-async function boot(){
-  setStatus(true, "Loading libraries…");
-  dbg("Waiting for MathLive…");
-  await waitForMathField();
-  dbg("MathLive OK. Waiting for Nerdamer…");
-  await waitForNerdamer(7000);
-  dbg("Nerdamer OK.");
-
-  const mfL = $("mfL"), mfR = $("mfR");
-
-  // Make MathLive behave like a clean editor
-  mfL.virtualKeyboardMode = "off";
-  mfR.virtualKeyboardMode = "off";
-  mfL.smartFence = true;
-  mfR.smartFence = true;
-  mfL.readOnly = false;
-  mfR.readOnly = false;
-
-  attachDragHandlers(mfL);
-  attachDragHandlers(mfR);
-
-  $("btnLoad").addEventListener("click", loadDefault);
-  $("btnUndo").addEventListener("click", undo);
-  $("btnReset").addEventListener("click", reset);
-
-  loadDefault();
+/* ---------- Drag preview ---------- */
+function showDragPreview(latex){
+  // show latex string as plain for preview (fast + stable)
+  $("dragPreview").textContent = latex;
 }
+function moveDragPreview(x,y){
+  $("dragPreview").style.transform = `translate(${x+18}px, ${y+18}px)`;
+}
+function hideDragPreview(){
+  $("dragPreview").style.transform = `translate(-9999px, -9999px)`;
+}
+window.addEventListener("dragover", (e) => moveDragPreview(e.clientX, e.clientY));
 
-boot().catch(err => {
-  setStatus(false, err.message || String(err));
-  dbg(String(err.stack || err));
-});
+/* ---------- Boot ---------- */
+function boot(){
+  try{
+    if(!window.nerdamer) throw new Error("Nerdamer not loaded. Check ./vendor/all.min.js path.");
+    if(!window.katex) throw new Error("KaTeX not loaded. CDN blocked?");
+    enableDrops($("lhsSide"), "L");
+    enableDrops($("rhsSide"), "R");
+
+    $("btnLoad").addEventListener("click", () => { try{ load(); } catch(e){ setStatus(false, e.message || String(e)); } });
+    $("btnUndo").addEventListener("click", () => undo());
+    $("btnReset").addEventListener("click", () => reset());
+
+    load();
+  } catch(e){
+    setStatus(false, e.message || String(e));
+  }
+}
+boot();
 </script>
 </body>
 </html>
