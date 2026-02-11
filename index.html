@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Equation Transposer (Tiles)</title>
+  <title>Drag Equation Transposer</title>
 
   <!-- Nerdamer (LOCAL) -->
   <script src="./vendor/all.min.js"></script>
@@ -15,16 +15,17 @@
   <style>
     :root{
       --bg:#0b1220;
-      --card:rgba(255,255,255,.06);
-      --stroke:rgba(255,255,255,.12);
       --text:rgba(255,255,255,.96);
-      --muted:rgba(255,255,255,.65);
+      --muted:rgba(255,255,255,.62);
+      --stroke:rgba(255,255,255,.12);
+      --card:rgba(255,255,255,.06);
       --accent:#7c5cff;
       --ok:#34d399;
       --bad:#ff4d6d;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
     }
+
     *{box-sizing:border-box}
     body{
       margin:0;
@@ -36,6 +37,7 @@
         radial-gradient(1000px 700px at 50% 120%, rgba(255,77,109,.10), transparent 55%),
         var(--bg);
     }
+
     .wrap{max-width:1200px;margin:0 auto;padding:18px 14px 26px}
     header{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px}
     h1{margin:0;font-size:18px}
@@ -64,16 +66,16 @@
       background:rgba(255,255,255,.08);
       color:var(--text);
       padding:10px 12px;border-radius:12px;
-      cursor:pointer;font-weight:800;font-size:13px;text-align:center;
+      cursor:pointer;font-weight:900;font-size:13px;text-align:center;
       user-select:none;
     }
     .btn:hover{background:rgba(255,255,255,.12)}
     .btn.primary{
-      border-color: rgba(124,92,255,.5);
+      border-color: rgba(124,92,255,.55);
       background: linear-gradient(180deg, rgba(124,92,255,.35), rgba(124,92,255,.18));
     }
     .btn.danger{
-      border-color: rgba(255,77,109,.5);
+      border-color: rgba(255,77,109,.55);
       background: linear-gradient(180deg, rgba(255,77,109,.30), rgba(255,77,109,.12));
     }
 
@@ -95,7 +97,7 @@
     .dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.35)}
     .dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)}
 
-    /* MASSIVE floating equation box */
+    /* MASSIVE floating equation box (no visible “containers”) */
     .bigEq{height:70vh;display:flex;align-items:center;justify-content:center;padding:16px}
     .eqBox{
       width:100%;
@@ -107,7 +109,7 @@
       display:flex;
       align-items:center;
       justify-content:center;
-      user-select:none; /* no selectable text */
+      user-select:none;
       overflow:auto;
     }
 
@@ -118,71 +120,57 @@
       gap:18px;
       align-items:center;
     }
+
+    /* “Sides” are invisible hit areas */
+    .side{
+      min-height: 120px;
+      padding:8px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      user-select:none;
+      border-radius:14px;
+    }
+    .side.dropActive{
+      outline:2px solid rgba(124,92,255,.55);
+      background:rgba(124,92,255,.08);
+    }
+
     .eqSign{
       font-family:var(--mono);
       font-weight:900;
       font-size: clamp(34px, 4vw, 74px);
-      color: rgba(255,255,255,.82);
+      color: rgba(255,255,255,.88);
       user-select:none;
     }
 
-    .side{
-      min-height: 120px;
-      border:1px solid rgba(255,255,255,.12);
-      background:rgba(0,0,0,.12);
-      border-radius:16px;
-      padding:14px 14px;
-      display:flex;
-      flex-wrap:wrap;
-      gap:10px;
-      align-items:center;
-      justify-content:center;
-      position:relative;
-      user-select:none;
-    }
-    .side.dropActive{
-      outline:2px solid rgba(124,92,255,.55);
-      background:rgba(124,92,255,.10);
-    }
+    /* Make KaTeX BIG, BOLD, WHITE */
+    .katex { font-size: clamp(34px, 4.2vw, 78px); }
+    .katex, .katex * { color: rgba(255,255,255,.98) !important; }
+    .katex { font-weight:900; }
+    .katex .mord, .katex .mbin, .katex .mrel, .katex .mop { font-weight:900; }
 
-    /* Tiles */
-    .tile{
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      padding:10px 12px;
-      border-radius:14px;
-      border:1px solid rgba(255,255,255,.10);
-      background:rgba(255,255,255,.06);
+    /* Draggable “tiles” are ONLY hover highlights, no boxes */
+    .dragPiece{
+      display:inline-block;
+      padding:2px 6px;
+      border-radius:10px;
       cursor:grab;
       user-select:none;
-      box-shadow:0 8px 18px rgba(0,0,0,.25);
-      transition: transform .06s ease, background .15s ease, border-color .15s ease;
-      font-weight:900;
-      color: rgba(255,255,255,.96);
+      -webkit-user-select:none;
+      touch-action:none;
     }
-    .tile:hover{
-      border-color: rgba(255,255,255,.18);
-      background:rgba(255,255,255,.09);
+    .dragPiece:hover{
+      outline:1px solid rgba(255,255,255,.18);
+      background:rgba(255,255,255,.06);
     }
-    .tile:active{cursor:grabbing; transform: translateY(1px);}
+    .dragPiece:active{cursor:grabbing}
 
-    /* Operators (not draggable) */
-    .op{
-      font-family:var(--mono);
-      font-weight:900;
-      color: rgba(255,255,255,.80);
-      font-size: clamp(20px, 2.4vw, 40px);
-      user-select:none;
-      opacity:.85;
+    /* Stop selection everywhere inside equation */
+    #lhsSide, #rhsSide, #lhsSide *, #rhsSide *{
+      user-select:none !important;
+      -webkit-user-select:none !important;
     }
-
-    /* KaTeX color + weight */
-    .tile .katex{ color: rgba(255,255,255,.98); font-weight:900; }
-    .tile .katex *{ color: rgba(255,255,255,.98); }
-    .tile .katex{ font-size: clamp(20px, 2.6vw, 44px); }
-
-    .op .katex{ color: rgba(255,255,255,.90); font-weight:900; }
 
     .dragPreview{
       position:fixed;left:0;top:0;
@@ -195,7 +183,7 @@
       box-shadow:0 20px 50px rgba(0,0,0,.45);
       font-family:var(--mono);
       color:rgba(255,255,255,.95);
-      font-size:26px;
+      font-size:24px;
       max-width:min(80vw, 980px);
       white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
       user-select:none;
@@ -216,17 +204,19 @@
     <div>
       <h1>Drag Equation Transposer</h1>
       <p class="sub">
-        Drag <b>tiles</b> across <span style="font-family:var(--mono)">=</span>.
-        Only <b>top-level</b> terms/factors can move. Internal pieces are illegal (snap back).
+        Drag highlighted parts across <span style="font-family:var(--mono)">=</span>.
+        Only exposed (top-level) terms/factors can move. Internal pieces must be exposed first.
       </p>
     </div>
-    <div class="pill">View: <span id="viewMode">Auto</span></div>
+    <div class="pill">Mode: <span id="modeText">Auto</span></div>
   </header>
 
   <div class="topbar">
     <div class="card pad">
       <div class="sub" style="margin:0 0 8px">
-        Enter an equation using <span style="font-family:var(--mono)">=</span>. Subscripts: <span style="font-family:var(--mono)">v_f</span>, <span style="font-family:var(--mono)">v_i</span>.
+        Enter an equation using <span style="font-family:var(--mono)">=</span>.
+        Subscripts: <span style="font-family:var(--mono)">v_f</span>, <span style="font-family:var(--mono)">v_i</span>.
+        Use explicit multiplication if needed: <span style="font-family:var(--mono)">f=m*a</span>.
       </div>
       <textarea id="eqInput">a=(v_f-v_i)/t</textarea>
       <div class="status">
@@ -244,9 +234,9 @@
   <div class="card bigEq">
     <div class="eqBox">
       <div class="eqRow">
-        <div class="side" id="lhsSide" aria-label="Left side"></div>
+        <div class="side" id="lhsSide"></div>
         <div class="eqSign">=</div>
-        <div class="side" id="rhsSide" aria-label="Right side"></div>
+        <div class="side" id="rhsSide"></div>
       </div>
     </div>
   </div>
@@ -261,33 +251,33 @@ function setStatus(ok, msg){
   $("statusDot").className = "dot " + (ok ? "ok" : "bad");
   $("statusText").textContent = msg;
 }
-function uniq(arr){ return [...new Set(arr)]; }
 
-/* ---------- Nerdamer ---------- */
 function nerd(expr){ return window.nerdamer(expr); }
 
-// keep expressions stable-ish without auto expanding
-function canonical(expr){
-  return nerd(expr).simplify().toString();
+/* Keep division as division visually by interpreting x^(-1) as denominator later */
+function normalize(expr){
+  // Avoid heavy simplify; keep something close to user structure
+  return nerd(expr).toString();
 }
 
-// nerdamer -> latex (best effort)
-function toLatex(expr){
-  const n = nerd(expr);
-  if (typeof n.toTeX === "function") return n.toTeX();
-  if (typeof n.text === "function") return n.text("latex");
-  return String(n.toString());
+function splitEquation(eqStr){
+  const s = String(eqStr).replace(/\s+/g,"").trim();
+  const idx = s.indexOf("=");
+  if(idx < 0) throw new Error("Equation must contain '='");
+  const L = s.slice(0, idx);
+  const R = s.slice(idx+1);
+  if(!L || !R) throw new Error("Both sides must be non-empty");
+  return { L, R };
 }
 
-/* ---------- Parsing (top-level only) ---------- */
 function splitTopLevelAdd(expr){
-  const s = canonical(expr);
+  const s = normalize(expr);
   const out = [];
   let depth = 0, buf = "", sign = +1;
 
   function flush(){
     const t = buf.trim();
-    if(t) out.push({ sign, text: t });
+    if(t) out.push({ sign, text:t });
     buf = "";
   }
 
@@ -307,7 +297,7 @@ function splitTopLevelAdd(expr){
 }
 
 function splitTopLevelMul(expr){
-  const s = canonical(expr);
+  const s = normalize(expr);
   let depth = 0, buf = "", mode = "num";
   const num = [], den = [];
 
@@ -331,10 +321,89 @@ function splitTopLevelMul(expr){
   flush();
   if(num.length === 0 && den.length === 0) return { num:[s.trim()], den:[] };
   if(num.length === 0) num.push("1");
-  return { num, den };
+
+  // Move factors of the form something^(-1) into denominator to force fraction bars in rendering
+  const num2 = [];
+  num.forEach(f => {
+    const m = f.match(/^(.*)\^\(-1\)$/);
+    if(m){
+      const inside = m[1];
+      den.push(inside);
+    } else {
+      num2.push(f);
+    }
+  });
+
+  return { num:num2.length?num2:["1"], den };
 }
 
-/* ---------- State ---------- */
+function nerdToTeX(expr){
+  const n = nerd(expr);
+  if(typeof n.toTeX === "function") return n.toTeX();
+  if(typeof n.text === "function") return n.text("latex");
+  return String(n.toString());
+}
+
+/* --- draggable payload map --- */
+let payloadById = new Map();
+let nextId = 1;
+
+function newId(){ return "p" + (nextId++); }
+
+/*
+We build each SIDE as KaTeX latex string with wrapped draggable pieces:
+  \htmlData{id=p1}{\htmlClass{dragPiece}{...}}
+KaTeX needs trust:true for these HTML macros.
+*/
+function wrapDraggable(texContent, payload){
+  const id = newId();
+  payloadById.set(id, payload);
+  // IMPORTANT: the order of wrappers matters; keep htmlData outermost.
+  return `\\htmlData{id=${id}}{\\htmlClass{dragPiece}{${texContent}}}`;
+}
+
+function buildSideLatex(sideName, expr){
+  const terms = splitTopLevelAdd(expr);
+
+  // If multiple top-level terms, show TERM mode (each term is draggable as a whole)
+  if(terms.length > 1){
+    $("modeText").textContent = "Terms";
+    let parts = [];
+    terms.forEach((t, i) => {
+      const signedExpr = (t.sign === 1) ? `(${t.text})` : `-(${t.text})`;
+      const tex = nerdToTeX(signedExpr);
+      const payload = { kind:"term", from:sideName, signedExpr: normalize(signedExpr) };
+      parts.push(wrapDraggable(tex, payload));
+      if(i !== terms.length-1) parts.push("\\;"); // spacing
+    });
+    return parts.join(" ");
+  }
+
+  // Single term: FACTOR mode. Expose top-level numerator/denominator factors.
+  $("modeText").textContent = "Factors";
+  const f = splitTopLevelMul(expr);
+
+  const numPieces = f.num.map(x => {
+    const tex = nerdToTeX(x);
+    const payload = { kind:"factor", from:sideName, where:"num", factorExpr: normalize(x) };
+    return wrapDraggable(tex, payload);
+  });
+
+  const denPieces = f.den.map(x => {
+    const tex = nerdToTeX(x);
+    const payload = { kind:"factor", from:sideName, where:"den", factorExpr: normalize(x) };
+    return wrapDraggable(tex, payload);
+  });
+
+  const numTex = numPieces.join("\\cdot ");
+  if(denPieces.length === 0){
+    return numTex || "0";
+  }
+  const denTex = denPieces.join("\\cdot ");
+  return `\\frac{${numTex}}{${denTex}}`;
+}
+
+/* --- state + moves --- */
 let state = {
   original: null,
   current: null,
@@ -363,134 +432,33 @@ function reset(){
   setStatus(true, "Reset.");
 }
 
-function splitEquation(eqStr){
-  const s = String(eqStr).replace(/\s+/g,"").trim();
-  const idx = s.indexOf("=");
-  if(idx < 0) throw new Error("Equation must contain '='");
-  const L = s.slice(0, idx);
-  const R = s.slice(idx+1);
-  if(!L || !R) throw new Error("Both sides must be non-empty");
-  return { L, R };
-}
-
-function load(){
-  if(!window.nerdamer) throw new Error("Nerdamer not loaded (check ./vendor/all.min.js)");
-  if(!window.katex) throw new Error("KaTeX not loaded (CDN blocked?)");
-
-  const raw = $("eqInput").value;
-  const { L, R } = splitEquation(raw);
-
-  // validate parse
-  nerd(L); nerd(R);
-
-  state.original = { L: canonical(L), R: canonical(R) };
-  state.current  = { ...state.original };
-  state.history  = [];
-  pushHistory("Loaded");
-  render();
-  setStatus(true, "Loaded. Drag tiles across '='.");
-}
-
-/* ---------- Rendering as tiles ---------- */
-function clear(el){ while(el.firstChild) el.removeChild(el.firstChild); }
-
-function katexNode(latex, cls){
-  const span = document.createElement("span");
-  if(cls) span.className = cls;
-  katex.render(latex, span, { throwOnError:false, strict:"ignore" });
-  return span;
-}
-
-function tile(payload, latex){
-  const div = document.createElement("div");
-  div.className = "tile";
-  div.draggable = true;
-  div.dataset.payload = JSON.stringify(payload);
-  div.appendChild(katexNode(latex));
-  div.addEventListener("dragstart", (e) => {
-    e.dataTransfer.setData("text/plain", div.dataset.payload);
-    showDragPreview(latex);
-  });
-  div.addEventListener("dragend", () => hideDragPreview());
-  return div;
-}
-
-function op(text){
-  const span = document.createElement("span");
-  span.className = "op";
-  span.textContent = text;
-  return span;
-}
-
-// If >1 top-level add term -> render terms (each term tile includes its sign).
-// Else render factors of the single term (num tiles + optional denom tiles with ÷).
-function renderSide(sideEl, sideName, expr){
-  clear(sideEl);
-
-  const terms = splitTopLevelAdd(expr);
-
-  if(terms.length > 1){
-    $("viewMode").textContent = "Terms";
-    // build signed term tiles
-    terms.forEach((t, idx) => {
-      const signed = (t.sign === 1) ? `(${t.text})` : `-(${t.text})`;
-      const can = canonical(signed);
-      const latex = toLatex(can);
-
-      const payload = { kind:"term", from: sideName, expr: can };
-      sideEl.appendChild(tile(payload, latex));
-    });
-    return;
-  }
-
-  // single term: show factor view
-  $("viewMode").textContent = "Factors";
-  const f = splitTopLevelMul(expr);
-  const num = f.num.map(x => canonical(x));
-  const den = f.den.map(x => canonical(x));
-
-  // numerator tiles
-  num.forEach((x, i) => {
-    if(i>0) sideEl.appendChild(op("×"));
-    const payload = { kind:"factor", from: sideName, where:"num", expr: x };
-    sideEl.appendChild(tile(payload, toLatex(x)));
-  });
-
-  // denominator tiles (keep as single denominator factors, not expanded)
-  den.forEach((x, i) => {
-    sideEl.appendChild(op("÷"));
-    const payload = { kind:"factor", from: sideName, where:"den", expr: x };
-    sideEl.appendChild(tile(payload, toLatex(x)));
-  });
-}
-
-function render(){
-  if(!state.current) return;
-  renderSide($("lhsSide"), "L", state.current.L);
-  renderSide($("rhsSide"), "R", state.current.R);
-}
-
-/* ---------- Legality + move rules ---------- */
-/*
-Legal move = you can only move what is already a rendered tile.
-So “-v_i inside (v_f - v_i)” is never a tile when it’s inside a numerator group.
-If a student tries to highlight/select it: impossible (text isn’t selectable).
-If they try to drag something else: only tile payloads exist.
+/* Move rules:
+   - term: moving across means ADD the opposite to target and REMOVE from source
+   - factor:
+       - moving a NUM factor across => divide the other side, remove from source side
+       - moving a DEN factor across => multiply the other side, remove from source side
+   Implementation: apply inverse operation to the destination side, and cancel on source by applying inverse on that side too.
+   We do it purely algebraically to BOTH sides so equality is maintained.
 */
-
 function applyMove(payload, toSide){
-  const fromSide = payload.from;
-  if(fromSide === toSide){
+  const from = payload.from;
+  if(from === toSide){
     setStatus(false, "Drop on the other side of '=' to transpose.");
-    render(); // snap back
     return;
   }
 
-  // term move: subtract term from both sides
+  let L = state.current.L;
+  let R = state.current.R;
+
   if(payload.kind === "term"){
-    const t = payload.expr; // already signed
-    const L = canonical(`(${state.current.L}) - (${t})`);
-    const R = canonical(`(${state.current.R}) - (${t})`);
+    const t = payload.signedExpr; // includes sign already
+
+    // If dragging from L -> R: subtract t from both sides (removes it from L, adds -t to R)
+    // If dragging from R -> L: subtract t from both sides (removes it from R, adds -t to L)
+    // This matches “move term across (sign flips)” behaviour.
+    L = normalize(`(${L}) - (${t})`);
+    R = normalize(`(${R}) - (${t})`);
+
     state.current = { L, R };
     pushHistory("Moved term (legal top-level term).");
     render();
@@ -498,25 +466,24 @@ function applyMove(payload, toSide){
     return;
   }
 
-  // factor move:
-  // numerator factor -> divide both sides
-  // denominator factor -> multiply both sides
   if(payload.kind === "factor"){
-    const f = payload.expr;
+    const f = payload.factorExpr;
+    // Numerator factor moved across means: divide both sides by f
+    // Denominator factor moved across means: multiply both sides by f
     if(payload.where === "num"){
-      const L = canonical(`(${state.current.L})/(${f})`);
-      const R = canonical(`(${state.current.R})/(${f})`);
+      L = normalize(`(${L})/(${f})`);
+      R = normalize(`(${R})/(${f})`);
       state.current = { L, R };
-      pushHistory("Moved numerator factor (divide both sides).");
+      pushHistory("Moved numerator factor (÷ both sides).");
       render();
       setStatus(true, "Moved factor.");
       return;
     }
     if(payload.where === "den"){
-      const L = canonical(`(${state.current.L})*(${f})`);
-      const R = canonical(`(${state.current.R})*(${f})`);
+      L = normalize(`(${L})*(${f})`);
+      R = normalize(`(${R})*(${f})`);
       state.current = { L, R };
-      pushHistory("Moved denominator factor (multiply both sides).");
+      pushHistory("Moved denominator factor (× both sides).");
       render();
       setStatus(true, "Moved factor.");
       return;
@@ -524,53 +491,103 @@ function applyMove(payload, toSide){
   }
 
   setStatus(false, "Illegal move.");
-  render();
 }
 
-/* ---------- Drop zones ---------- */
-function enableDrops(zoneEl, toSide){
-  zoneEl.addEventListener("dragover", (e) => {
+/* --- render equation into both sides, then attach drag handlers to wrapped spans --- */
+function clear(el){ while(el.firstChild) el.removeChild(el.firstChild); }
+
+function attachDragHandlers(container, toSide){
+  const pieces = container.querySelectorAll(".dragPiece");
+  pieces.forEach(el => {
+    // Find payload id from nearest element with data-id
+    let cur = el;
+    let id = null;
+    while(cur && cur !== container){
+      if(cur.dataset && cur.dataset.id){ id = cur.dataset.id; break; }
+      cur = cur.parentElement;
+    }
+    if(!id) return;
+
+    const payload = payloadById.get(id);
+    if(!payload) return;
+
+    el.setAttribute("draggable", "true");
+
+    el.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/plain", id);
+      showDragPreview(el.textContent || "move");
+    });
+    el.addEventListener("dragend", () => hideDragPreview());
+  });
+
+  // drop zone behaviour
+  container.addEventListener("dragover", (e) => {
     e.preventDefault();
-    zoneEl.classList.add("dropActive");
+    container.classList.add("dropActive");
     moveDragPreview(e.clientX, e.clientY);
   });
-  zoneEl.addEventListener("dragleave", () => zoneEl.classList.remove("dropActive"));
-  zoneEl.addEventListener("drop", (e) => {
+  container.addEventListener("dragleave", () => container.classList.remove("dropActive"));
+  container.addEventListener("drop", (e) => {
     e.preventDefault();
-    zoneEl.classList.remove("dropActive");
+    container.classList.remove("dropActive");
     hideDragPreview();
-    const raw = e.dataTransfer.getData("text/plain");
-    if(!raw) return;
-    try{
-      applyMove(JSON.parse(raw), toSide);
-    } catch(err){
+    const id = e.dataTransfer.getData("text/plain");
+    const payload = payloadById.get(id);
+    if(!payload){
       setStatus(false, "Drop failed.");
-      render();
+      return;
     }
+    applyMove(payload, toSide);
   });
 }
 
-/* ---------- Drag preview ---------- */
-function showDragPreview(latex){
-  // show latex string as plain for preview (fast + stable)
-  $("dragPreview").textContent = latex;
+function render(){
+  if(!state.current) return;
+
+  payloadById.clear();
+  nextId = 1;
+
+  const lhsTex = buildSideLatex("L", state.current.L);
+  const rhsTex = buildSideLatex("R", state.current.R);
+
+  clear($("lhsSide"));
+  clear($("rhsSide"));
+
+  // Render each side separately. Trust enabled so htmlData/htmlClass works.
+  katex.render(lhsTex, $("lhsSide"), { displayMode:true, throwOnError:false, strict:"ignore", trust:true });
+  katex.render(rhsTex, $("rhsSide"), { displayMode:true, throwOnError:false, strict:"ignore", trust:true });
+
+  // Attach handlers AFTER rendering
+  attachDragHandlers($("lhsSide"), "L");
+  attachDragHandlers($("rhsSide"), "R");
 }
-function moveDragPreview(x,y){
-  $("dragPreview").style.transform = `translate(${x+18}px, ${y+18}px)`;
-}
-function hideDragPreview(){
-  $("dragPreview").style.transform = `translate(-9999px, -9999px)`;
-}
+
+/* --- drag preview --- */
+function showDragPreview(text){ $("dragPreview").textContent = text; }
+function moveDragPreview(x,y){ $("dragPreview").style.transform = `translate(${x+18}px, ${y+18}px)`; }
+function hideDragPreview(){ $("dragPreview").style.transform = `translate(-9999px, -9999px)`; }
 window.addEventListener("dragover", (e) => moveDragPreview(e.clientX, e.clientY));
 
-/* ---------- Boot ---------- */
+function load(){
+  if(!window.nerdamer) throw new Error("Nerdamer not loaded. Check ./vendor/all.min.js path.");
+  if(!window.katex) throw new Error("KaTeX not loaded (CDN blocked?).");
+
+  const raw = $("eqInput").value;
+  const { L, R } = splitEquation(raw);
+
+  // validate parse
+  nerd(L); nerd(R);
+
+  state.original = { L: normalize(L), R: normalize(R) };
+  state.current  = { ...state.original };
+  state.history  = [];
+  pushHistory("Loaded");
+  render();
+  setStatus(true, "Loaded. Drag highlighted parts across '='.");
+}
+
 function boot(){
   try{
-    if(!window.nerdamer) throw new Error("Nerdamer not loaded. Check ./vendor/all.min.js path.");
-    if(!window.katex) throw new Error("KaTeX not loaded. CDN blocked?");
-    enableDrops($("lhsSide"), "L");
-    enableDrops($("rhsSide"), "R");
-
     $("btnLoad").addEventListener("click", () => { try{ load(); } catch(e){ setStatus(false, e.message || String(e)); } });
     $("btnUndo").addEventListener("click", () => undo());
     $("btnReset").addEventListener("click", () => reset());
