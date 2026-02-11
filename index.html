@@ -5,8 +5,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Drag Equation Transposer</title>
 
-  <!-- Nerdamer (LOCAL) -->
-  <script src="./vendor/all.min.js"></script>
+  <!-- Nerdamer (local) -->
+  <script src="./vendor/nerdamer.core.js"></script>
+  <script src="./vendor/Algebra.js"></script>
+  <script src="./vendor/Solve.js"></script>
+  <script src="./vendor/Extra.js"></script>
 
   <!-- KaTeX (CDN) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
@@ -15,17 +18,16 @@
   <style>
     :root{
       --bg:#0b1220;
-      --text:rgba(255,255,255,.96);
-      --muted:rgba(255,255,255,.62);
-      --stroke:rgba(255,255,255,.12);
       --card:rgba(255,255,255,.06);
+      --stroke:rgba(255,255,255,.12);
+      --text:rgba(255,255,255,.95);
+      --muted:rgba(255,255,255,.65);
       --accent:#7c5cff;
       --ok:#34d399;
       --bad:#ff4d6d;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
     }
-
     *{box-sizing:border-box}
     body{
       margin:0;
@@ -38,18 +40,18 @@
         var(--bg);
     }
 
-    .wrap{max-width:1200px;margin:0 auto;padding:18px 14px 26px}
-    header{display:flex;justify-content:space-between;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:10px}
-    h1{margin:0;font-size:18px}
-    .sub{margin:0;color:var(--muted);font-size:12.5px;line-height:1.25}
-    .pill{
-      display:inline-flex;align-items:center;gap:8px;
-      border:1px solid var(--stroke);
-      background:rgba(255,255,255,.06);
-      padding:6px 10px;border-radius:999px;
-      font-size:12px;color:var(--muted);font-family:var(--mono);
-    }
+    .wrap{max-width:1200px;margin:0 auto;padding:20px 16px 26px}
+    header{display:flex;gap:12px;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;margin-bottom:12px}
+    h1{margin:0;font-size:20px;letter-spacing:.2px}
+    .sub{margin:0;color:var(--muted);font-size:13px}
 
+    .topbar{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:12px;
+      align-items:start;
+      margin-bottom:12px;
+    }
     .card{
       border:1px solid var(--stroke);
       background:linear-gradient(180deg, var(--card), rgba(255,255,255,.04));
@@ -57,28 +59,8 @@
       box-shadow:0 10px 30px rgba(0,0,0,.28);
       backdrop-filter: blur(10px);
     }
-    .pad{padding:12px}
-
-    .topbar{display:grid;grid-template-columns:1fr auto;gap:12px;margin-bottom:12px}
-    .actions{display:flex;flex-direction:column;gap:10px}
-    .btn{
-      border:1px solid var(--stroke);
-      background:rgba(255,255,255,.08);
-      color:var(--text);
-      padding:10px 12px;border-radius:12px;
-      cursor:pointer;font-weight:900;font-size:13px;text-align:center;
-      user-select:none;
-    }
-    .btn:hover{background:rgba(255,255,255,.12)}
-    .btn.primary{
-      border-color: rgba(124,92,255,.55);
-      background: linear-gradient(180deg, rgba(124,92,255,.35), rgba(124,92,255,.18));
-    }
-    .btn.danger{
-      border-color: rgba(255,77,109,.55);
-      background: linear-gradient(180deg, rgba(255,77,109,.30), rgba(255,77,109,.12));
-    }
-
+    .card.pad{padding:12px}
+    label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px}
     textarea{
       width:100%;
       border:1px solid var(--stroke);
@@ -89,195 +71,237 @@
       outline:none;
       font-size:14px;
       font-family:var(--mono);
-      min-height:64px;
+      min-height:70px;
       resize:vertical;
     }
+    .actions{display:flex;flex-direction:column;gap:10px}
+    .btn{
+      border:1px solid var(--stroke);
+      background:rgba(255,255,255,.08);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:700;
+      font-size:13px;
+      user-select:none;
+      text-align:center;
+      transition: transform .05s ease, background .15s ease, border-color .15s ease;
+    }
+    .btn:hover{background:rgba(255,255,255,.12)}
+    .btn:active{transform: translateY(1px)}
+    .btn.primary{
+      border-color: rgba(124,92,255,.5);
+      background: linear-gradient(180deg, rgba(124,92,255,.35), rgba(124,92,255,.18));
+    }
+    .btn.danger{
+      border-color: rgba(255,77,109,.5);
+      background: linear-gradient(180deg, rgba(255,77,109,.30), rgba(255,77,109,.12));
+    }
 
-    .status{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--muted)}
+    .status{
+      display:flex;align-items:center;gap:8px;
+      margin-top:10px;font-size:12px;color:var(--muted)
+    }
     .dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.35)}
-    .dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)}
+    .dot.ok{background:var(--ok)}
+    .dot.bad{background:var(--bad)}
 
-    /* MASSIVE floating equation box (no visible “containers”) */
-    .bigEq{height:70vh;display:flex;align-items:center;justify-content:center;padding:16px}
-    .eqBox{
-      width:100%;
-      height:100%;
-      border-radius:18px;
-      border:1px solid rgba(255,255,255,.10);
-      background:rgba(0,0,0,.18);
-      padding:18px;
+    /* MASSIVE equation box */
+    .bigEq{
+      height: 70vh;
       display:flex;
       align-items:center;
       justify-content:center;
-      user-select:none;
+      padding:18px;
       overflow:auto;
     }
-
-    .eqRow{
-      width:min(1100px, 100%);
-      display:grid;
-      grid-template-columns: 1fr auto 1fr;
-      gap:18px;
-      align-items:center;
-    }
-
-    /* “Sides” are invisible hit areas */
-    .side{
-      min-height: 120px;
-      padding:8px;
+    .bigEqInner{
+      width:100%;
       display:flex;
-      align-items:center;
       justify-content:center;
-      user-select:none;
-      border-radius:14px;
-    }
-    .side.dropActive{
-      outline:2px solid rgba(124,92,255,.55);
-      background:rgba(124,92,255,.08);
-    }
-
-    .eqSign{
-      font-family:var(--mono);
-      font-weight:900;
-      font-size: clamp(34px, 4vw, 74px);
-      color: rgba(255,255,255,.88);
-      user-select:none;
+      align-items:center;
+      padding:24px;
+      border-radius:22px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.16);
+      min-height: calc(70vh - 36px);
     }
 
-    /* Make KaTeX BIG, BOLD, WHITE */
-    .katex { font-size: clamp(34px, 4.2vw, 78px); }
-    .katex, .katex * { color: rgba(255,255,255,.98) !important; }
-    .katex { font-weight:900; }
-    .katex .mord, .katex .mbin, .katex .mrel, .katex .mop { font-weight:900; }
+    /* KaTeX sizing + bold white feel */
+    .katex{font-size: clamp(34px, 5vw, 72px); font-weight:800;}
+    .katex *{font-weight:800;}
+    .katex, .katex .mord, .katex .mrel, .katex .mbin, .katex .mop { color: rgba(255,255,255,.98) !important; }
 
-    /* Draggable “tiles” are ONLY hover highlights, no boxes */
-    .dragPiece{
-      display:inline-block;
-      padding:2px 6px;
-      border-radius:10px;
-      cursor:grab;
-      user-select:none;
-      -webkit-user-select:none;
-      touch-action:none;
-    }
-    .dragPiece:hover{
-      outline:1px solid rgba(255,255,255,.18);
-      background:rgba(255,255,255,.06);
-    }
-    .dragPiece:active{cursor:grabbing}
-
-    /* Stop selection everywhere inside equation */
-    #lhsSide, #rhsSide, #lhsSide *, #rhsSide *{
+    /* Make equation feel like “ink”, not UI */
+    .noSelect, .noSelect *{
       user-select:none !important;
       -webkit-user-select:none !important;
+      -ms-user-select:none !important;
     }
 
-    .dragPreview{
-      position:fixed;left:0;top:0;
-      transform: translate(-9999px, -9999px);
-      pointer-events:none;z-index:9999;
-      padding:12px 14px;border-radius:14px;
-      border:1px solid rgba(255,255,255,.18);
-      background:rgba(0,0,0,.55);
-      backdrop-filter: blur(10px);
-      box-shadow:0 20px 50px rgba(0,0,0,.45);
+    /* Draggable parts INSIDE KaTeX (invisible tiles) */
+    .tile{
+      cursor:grab;
+      border-radius:10px;
+      padding:2px 4px;
+      margin:0 2px;
+      display:inline-block;
+      position:relative;
+    }
+    .tile:hover{
+      background: rgba(255,255,255,.06);
+      outline: 1px solid rgba(255,255,255,.10);
+    }
+    .tile:active{cursor:grabbing}
+
+    /* Drop feedback */
+    .eqDropL, .eqDropR{ transition: background .12s ease, outline .12s ease; }
+    .dropActive{
+      background: rgba(124,92,255,.07) !important;
+      outline: 2px solid rgba(124,92,255,.45) !important;
+    }
+
+    /* Small footer */
+    .footer{
+      margin-top:12px;
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+      color:var(--muted);
+      font-size:12px;
       font-family:var(--mono);
-      color:rgba(255,255,255,.95);
-      font-size:24px;
-      max-width:min(80vw, 980px);
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-      user-select:none;
     }
 
     @media (max-width: 980px){
       .topbar{grid-template-columns:1fr}
       .actions{flex-direction:row;flex-wrap:wrap}
-      .eqRow{grid-template-columns: 1fr; gap:12px;}
-      .eqSign{display:none}
     }
   </style>
 </head>
 
 <body>
-<div class="wrap">
-  <header>
-    <div>
-      <h1>Drag Equation Transposer</h1>
-      <p class="sub">
-        Drag highlighted parts across <span style="font-family:var(--mono)">=</span>.
-        Only exposed (top-level) terms/factors can move. Internal pieces must be exposed first.
-      </p>
-    </div>
-    <div class="pill">Mode: <span id="modeText">Auto</span></div>
-  </header>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Drag Equation Transposer</h1>
+        <p class="sub">Drag a highlighted top-level <b>term</b> or <b>factor</b> across <span style="font-family:var(--mono)">=</span>. Internal pieces are illegal (snap back).</p>
+      </div>
+      <div class="sub" style="font-family:var(--mono)">
+        View:
+        <span id="viewLabel" style="font-weight:800;color:rgba(255,255,255,.9)">Terms</span>
+        <span style="opacity:.7">(| press V to toggle)</span>
+      </div>
+    </header>
 
-  <div class="topbar">
-    <div class="card pad">
-      <div class="sub" style="margin:0 0 8px">
-        Enter an equation using <span style="font-family:var(--mono)">=</span>.
-        Subscripts: <span style="font-family:var(--mono)">v_f</span>, <span style="font-family:var(--mono)">v_i</span>.
-        Use explicit multiplication if needed: <span style="font-family:var(--mono)">f=m*a</span>.
+    <div class="topbar">
+      <div class="card pad">
+        <label>Equation (use <span style="font-family:var(--mono)">=</span>; subscripts like <span style="font-family:var(--mono)">v_f</span>, <span style="font-family:var(--mono)">v_i</span>. Use explicit multiplication if needed: <span style="font-family:var(--mono)">f=m*a</span>.)</label>
+        <textarea id="eqInput">a=(v_f-v_i)/t</textarea>
+        <div class="status">
+          <span class="dot" id="statusDot"></span>
+          <span id="statusText">Ready.</span>
+        </div>
       </div>
-      <textarea id="eqInput">a=(v_f-v_i)/t</textarea>
-      <div class="status">
-        <span class="dot" id="statusDot"></span>
-        <span id="statusText">Booting…</span>
+      <div class="actions">
+        <div class="btn primary" id="loadBtn">Load</div>
+        <div class="btn" id="undoBtn">Undo</div>
+        <div class="btn danger" id="resetBtn">Reset</div>
       </div>
     </div>
-    <div class="actions">
-      <div class="btn primary" id="btnLoad">Load</div>
-      <div class="btn" id="btnUndo">Undo</div>
-      <div class="btn danger" id="btnReset">Reset</div>
+
+    <div class="card bigEq">
+      <div class="bigEqInner noSelect" id="eqBox"></div>
+    </div>
+
+    <div class="footer">
+      <div>Tips: move whole brackets first to “expose” parts. Example: move <span style="color:#fff">t</span> across gives <span style="color:#fff">a·t = v_f - v_i</span>.</div>
+      <div id="stepsText">steps: 0</div>
     </div>
   </div>
-
-  <div class="card bigEq">
-    <div class="eqBox">
-      <div class="eqRow">
-        <div class="side" id="lhsSide"></div>
-        <div class="eqSign">=</div>
-        <div class="side" id="rhsSide"></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="dragPreview" id="dragPreview"></div>
-</div>
 
 <script>
+/* -----------------------------
+   Core goals:
+   - KaTeX renders pretty math
+   - We inject \htmlId + \htmlClass around ONLY top-level movable pieces
+   - Drag across '=' applies algebraically legal operations using Nerdamer
+-------------------------------- */
+
 const $ = (id) => document.getElementById(id);
+
+let state = {
+  original: { lhs:"", rhs:"" },
+  current:  { lhs:"", rhs:"" },
+  view: "terms", // "terms" or "factors"
+  history: []
+};
 
 function setStatus(ok, msg){
   $("statusDot").className = "dot " + (ok ? "ok" : "bad");
   $("statusText").textContent = msg;
 }
 
-function nerd(expr){ return window.nerdamer(expr); }
-
-/* Keep division as division visually by interpreting x^(-1) as denominator later */
-function normalize(expr){
-  // Avoid heavy simplify; keep something close to user structure
-  return nerd(expr).toString();
-}
+function cleanEqString(s){ return s.replace(/\s+/g, " ").trim(); }
 
 function splitEquation(eqStr){
-  const s = String(eqStr).replace(/\s+/g,"").trim();
+  const s = cleanEqString(eqStr);
   const idx = s.indexOf("=");
-  if(idx < 0) throw new Error("Equation must contain '='");
-  const L = s.slice(0, idx);
-  const R = s.slice(idx+1);
-  if(!L || !R) throw new Error("Both sides must be non-empty");
-  return { L, R };
+  if(idx < 0) throw new Error("Equation must contain '=' (e.g. a=(v_f-v_i)/t).");
+  const lhs = s.slice(0, idx).trim();
+  const rhs = s.slice(idx+1).trim();
+  if(!lhs || !rhs) throw new Error("Both sides must be non-empty.");
+  return { lhs, rhs };
 }
 
+/* Insert explicit multiplication in common student-style inputs:
+   - "ma" -> "m*a" (letters adjacent)
+   - "2a" -> "2*a"
+   - ")a" -> ")*a"
+   - "a(" -> "a*(" (rare but can help)
+*/
+function insertImplicitMul(s){
+  let x = s;
+
+  // between number and letter or "("
+  x = x.replace(/(\d)([A-Za-z(])/g, "$1*$2");
+  // between letter or ")" and number
+  x = x.replace(/([A-Za-z)])(\d)/g, "$1*$2");
+  // between letter and letter
+  x = x.replace(/([A-Za-z_}])([A-Za-z_])/g, "$1*$2");
+  // between ")" and letter or "("
+  x = x.replace(/(\))([A-Za-z(])/g, "$1*$2");
+  // between letter and "("
+  x = x.replace(/([A-Za-z_}])(\()/g, "$1*$2");
+
+  return x;
+}
+
+function nerdNormalize(expr){
+  // normalize with explicit multiplication inserted
+  const safe = insertImplicitMul(expr);
+  return nerdamer(safe).expand().toString();
+}
+
+/* --- view decomposition --- */
+
+/* TERMS:
+   We split top-level additions/subtractions.
+   We store payload as a SIGNED expression chunk, e.g.
+   + (v_f/t)
+   - (v_i/t)
+*/
 function splitTopLevelAdd(expr){
-  const s = normalize(expr);
+  const s = nerdNormalize(expr);
   const out = [];
-  let depth = 0, buf = "", sign = +1;
+  let depth = 0;
+  let buf = "";
+  let sign = +1;
 
   function flush(){
     const t = buf.trim();
-    if(t) out.push({ sign, text:t });
+    if(t) out.push({ sign, text: t });
     buf = "";
   }
 
@@ -296,14 +320,33 @@ function splitTopLevelAdd(expr){
   return out.length ? out : [{ sign:+1, text:s.trim() }];
 }
 
-function splitTopLevelMul(expr){
-  const s = normalize(expr);
-  let depth = 0, buf = "", mode = "num";
-  const num = [], den = [];
+/* FACTORS:
+   We want REAL numerator/denominator factors (not t^(-1)).
+   So we:
+   - split top-level by * and /
+   - AND also pull out powers with exponent -1 into denominator when possible.
+*/
+function splitTopLevelMulFrac(expr){
+  const s = nerdNormalize(expr);
+
+  let depth = 0;
+  let buf = "";
+  let mode = "num";
+  const num = [];
+  const den = [];
 
   function flush(){
     const t = buf.trim();
-    if(t) (mode === "num" ? num : den).push(t);
+    if(!t) { buf=""; return; }
+
+    // convert something like (t)^(-1) or t^(-1) into denominator factor t
+    const m = t.match(/^(.+)\^\(-1\)$/);
+    if(m){
+      const base = m[1].trim();
+      den.push(base);
+    } else {
+      (mode === "num" ? num : den).push(t);
+    }
     buf = "";
   }
 
@@ -319,285 +362,282 @@ function splitTopLevelMul(expr){
     }
   }
   flush();
+
   if(num.length === 0 && den.length === 0) return { num:[s.trim()], den:[] };
   if(num.length === 0) num.push("1");
+  return { num, den };
+}
 
-  // Move factors of the form something^(-1) into denominator to force fraction bars in rendering
-  const num2 = [];
-  num.forEach(f => {
-    const m = f.match(/^(.*)\^\(-1\)$/);
-    if(m){
-      const inside = m[1];
-      den.push(inside);
-    } else {
-      num2.push(f);
-    }
-  });
+/* --- TeX building (KaTeX + draggable IDs) --- */
 
-  return { num:num2.length?num2:["1"], den };
+const payloadById = new Map();
+
+function escTex(s){
+  // Nerdamer produces TeX-friendly-ish strings via toTeX; we avoid manual escaping here.
+  return s;
 }
 
 function nerdToTeX(expr){
-  const n = nerd(expr);
+  const n = nerdamer(insertImplicitMul(expr));
   if(typeof n.toTeX === "function") return n.toTeX();
   if(typeof n.text === "function") return n.text("latex");
-  return String(n.toString());
+  // fallback plain
+  return "\\text{" + String(n.toString()).replace(/\\/g,"\\\\").replace(/}/g,"\\}") + "}";
 }
 
-/* --- draggable payload map --- */
-let payloadById = new Map();
-let nextId = 1;
-
-function newId(){ return "p" + (nextId++); }
-
-/*
-We build each SIDE as KaTeX latex string with wrapped draggable pieces:
-  \htmlData{id=p1}{\htmlClass{dragPiece}{...}}
-KaTeX needs trust:true for these HTML macros.
-*/
-function wrapDraggable(texContent, payload){
-  const id = newId();
-  payloadById.set(id, payload);
-  // IMPORTANT: the order of wrappers matters; keep htmlData outermost.
-  return `\\htmlData{id=${id}}{\\htmlClass{dragPiece}{${texContent}}}`;
+function tile(texInside, id){
+  // Requires trust:true in katex.render
+  return `\\htmlClass{tile}{\\htmlId{${id}}{${texInside}}}`;
 }
 
-function buildSideLatex(sideName, expr){
-  const terms = splitTopLevelAdd(expr);
-
-  // If multiple top-level terms, show TERM mode (each term is draggable as a whole)
-  if(terms.length > 1){
-    $("modeText").textContent = "Terms";
-    let parts = [];
-    terms.forEach((t, i) => {
+function buildSideTeX(sideName, expr){
+  if(state.view === "terms"){
+    const terms = splitTopLevelAdd(expr);
+    const chunks = terms.map((t, i) => {
+      const id = `${sideName}_term_${i}`;
       const signedExpr = (t.sign === 1) ? `(${t.text})` : `-(${t.text})`;
-      const tex = nerdToTeX(signedExpr);
-      const payload = { kind:"term", from:sideName, signedExpr: normalize(signedExpr) };
-      parts.push(wrapDraggable(tex, payload));
-      if(i !== terms.length-1) parts.push("\\;"); // spacing
+      payloadById.set(id, { kind:"term", side:sideName, signedExpr });
+
+      const inner = nerdToTeX(t.text);
+      const withSign = (t.sign === 1)
+        ? (i===0 ? `${tile(inner, id)}` : `+${tile(inner, id)}`)
+        : (i===0 ? `-${tile(inner, id)}` : `-${tile(inner, id)}`);
+
+      return withSign;
     });
-    return parts.join(" ");
+
+    return chunks.join("");
   }
 
-  // Single term: FACTOR mode. Expose top-level numerator/denominator factors.
-  $("modeText").textContent = "Factors";
-  const f = splitTopLevelMul(expr);
+  // factors view
+  const f = splitTopLevelMulFrac(expr);
 
-  const numPieces = f.num.map(x => {
-    const tex = nerdToTeX(x);
-    const payload = { kind:"factor", from:sideName, where:"num", factorExpr: normalize(x) };
-    return wrapDraggable(tex, payload);
-  });
-
-  const denPieces = f.den.map(x => {
-    const tex = nerdToTeX(x);
-    const payload = { kind:"factor", from:sideName, where:"den", factorExpr: normalize(x) };
-    return wrapDraggable(tex, payload);
-  });
-
-  const numTex = numPieces.join("\\cdot ");
-  if(denPieces.length === 0){
-    return numTex || "0";
+  function joinFactors(arr, where){
+    if(arr.length === 0) return "1";
+    return arr.map((x, i) => {
+      const id = `${sideName}_fac_${where}_${i}`;
+      payloadById.set(id, { kind:"factor", side:sideName, where, factorExpr:`(${x})` });
+      const inner = nerdToTeX(x);
+      return tile(inner, id);
+    }).join("\\cdot ");
   }
-  const denTex = denPieces.join("\\cdot ");
+
+  const numTex = joinFactors(f.num, "num");
+  const denTex = joinFactors(f.den, "den");
+
+  if(f.den.length === 0){
+    return numTex;
+  }
   return `\\frac{${numTex}}{${denTex}}`;
 }
 
-/* --- state + moves --- */
-let state = {
-  original: null,
-  current: null,
-  history: []
-};
+function buildEquationTeX(lhsExpr, rhsExpr){
+  payloadById.clear();
 
-function pushHistory(desc){
-  state.history.push({ L: state.current.L, R: state.current.R, desc });
+  const lhs = buildSideTeX("lhs", lhsExpr);
+  const rhs = buildSideTeX("rhs", rhsExpr);
+
+  // Make the two sides droppable areas too
+  // (so you can drop onto either side; we use wrapping ids)
+  const lhsWrap = `\\htmlClass{eqDropL}{\\htmlId{eqDropL}{${lhs}}}`;
+  const rhsWrap = `\\htmlClass{eqDropR}{\\htmlId{eqDropR}{${rhs}}}`;
+
+  return `${lhsWrap}= ${rhsWrap}`;
 }
 
-function undo(){
-  if(state.history.length <= 1){ setStatus(false, "Nothing to undo."); return; }
-  state.history.pop();
-  const prev = state.history[state.history.length - 1];
-  state.current = { L: prev.L, R: prev.R };
-  render();
-  setStatus(true, "Undone.");
-}
+/* --- algebra moves --- */
 
-function reset(){
-  if(!state.original){ setStatus(false, "Load an equation first."); return; }
-  state.current = { ...state.original };
-  state.history = [];
-  pushHistory("Reset");
-  render();
-  setStatus(true, "Reset.");
-}
-
-/* Move rules:
-   - term: moving across means ADD the opposite to target and REMOVE from source
-   - factor:
-       - moving a NUM factor across => divide the other side, remove from source side
-       - moving a DEN factor across => multiply the other side, remove from source side
-   Implementation: apply inverse operation to the destination side, and cancel on source by applying inverse on that side too.
-   We do it purely algebraically to BOTH sides so equality is maintained.
+/* Term move:
+   If user drags a signed term chunk across '=', legal action is:
+   subtract that signed term from BOTH sides.
 */
-function applyMove(payload, toSide){
-  const from = payload.from;
+function moveTermAcross(payload, toSide){
+  const from = payload.side;
   if(from === toSide){
     setStatus(false, "Drop on the other side of '=' to transpose.");
     return;
   }
+  const T = payload.signedExpr; // already includes sign
 
-  let L = state.current.L;
-  let R = state.current.R;
+  const lhs = nerdNormalize(`(${state.current.lhs}) - (${T})`);
+  const rhs = nerdNormalize(`(${state.current.rhs}) - (${T})`);
 
-  if(payload.kind === "term"){
-    const t = payload.signedExpr; // includes sign already
-
-    // If dragging from L -> R: subtract t from both sides (removes it from L, adds -t to R)
-    // If dragging from R -> L: subtract t from both sides (removes it from R, adds -t to L)
-    // This matches “move term across (sign flips)” behaviour.
-    L = normalize(`(${L}) - (${t})`);
-    R = normalize(`(${R}) - (${t})`);
-
-    state.current = { L, R };
-    pushHistory("Moved term (legal top-level term).");
-    render();
-    setStatus(true, "Moved term.");
-    return;
-  }
-
-  if(payload.kind === "factor"){
-    const f = payload.factorExpr;
-    // Numerator factor moved across means: divide both sides by f
-    // Denominator factor moved across means: multiply both sides by f
-    if(payload.where === "num"){
-      L = normalize(`(${L})/(${f})`);
-      R = normalize(`(${R})/(${f})`);
-      state.current = { L, R };
-      pushHistory("Moved numerator factor (÷ both sides).");
-      render();
-      setStatus(true, "Moved factor.");
-      return;
-    }
-    if(payload.where === "den"){
-      L = normalize(`(${L})*(${f})`);
-      R = normalize(`(${R})*(${f})`);
-      state.current = { L, R };
-      pushHistory("Moved denominator factor (× both sides).");
-      render();
-      setStatus(true, "Moved factor.");
-      return;
-    }
-  }
-
-  setStatus(false, "Illegal move.");
+  state.current = { lhs, rhs };
+  pushHistory(`Moved term across '=' (subtracted ${T} from both sides)`);
+  render();
+  setStatus(true, "Moved term.");
 }
 
-/* --- render equation into both sides, then attach drag handlers to wrapped spans --- */
-function clear(el){ while(el.firstChild) el.removeChild(el.firstChild); }
+/* Factor move:
+   If factor is in numerator on dragged side:
+     divide BOTH sides by factor
+   If factor is in denominator on dragged side:
+     multiply BOTH sides by factor
+*/
+function moveFactorAcross(payload, toSide){
+  const from = payload.side;
+  if(from === toSide){
+    setStatus(false, "Drop on the other side of '=' to transpose.");
+    return;
+  }
+  const F = payload.factorExpr;
 
-function attachDragHandlers(container, toSide){
-  const pieces = container.querySelectorAll(".dragPiece");
-  pieces.forEach(el => {
-    // Find payload id from nearest element with data-id
-    let cur = el;
-    let id = null;
-    while(cur && cur !== container){
-      if(cur.dataset && cur.dataset.id){ id = cur.dataset.id; break; }
-      cur = cur.parentElement;
-    }
-    if(!id) return;
+  let lhs = state.current.lhs;
+  let rhs = state.current.rhs;
 
+  if(payload.where === "num"){
+    lhs = nerdNormalize(`(${lhs}) / (${F})`);
+    rhs = nerdNormalize(`(${rhs}) / (${F})`);
+  } else {
+    lhs = nerdNormalize(`(${lhs}) * (${F})`);
+    rhs = nerdNormalize(`(${rhs}) * (${F})`);
+  }
+
+  state.current = { lhs, rhs };
+  pushHistory(`Moved factor across '=' (${payload.where==="num"?"÷":"×"} ${F} on both sides)`);
+  render();
+  setStatus(true, "Moved factor.");
+}
+
+/* --- history --- */
+function pushHistory(desc){
+  state.history.push({ lhs: state.current.lhs, rhs: state.current.rhs, desc });
+  $("stepsText").textContent = `steps: ${state.history.length}`;
+}
+function undo(){
+  if(state.history.length <= 1){
+    setStatus(false, "Nothing to undo.");
+    return;
+  }
+  state.history.pop();
+  const prev = state.history[state.history.length-1];
+  state.current = { lhs: prev.lhs, rhs: prev.rhs };
+  $("stepsText").textContent = `steps: ${state.history.length}`;
+  render();
+  setStatus(true, "Undone.");
+}
+function reset(){
+  if(!state.original.lhs){
+    setStatus(false, "Load an equation first.");
+    return;
+  }
+  state.current = { ...state.original };
+  state.history = [{ lhs: state.current.lhs, rhs: state.current.rhs, desc:"Loaded equation" }];
+  $("stepsText").textContent = `steps: 1`;
+  render();
+  setStatus(true, "Reset.");
+}
+
+/* --- render + wiring drag/drop on KaTeX DOM --- */
+
+let dragPayload = null;
+
+function attachTileHandlers(){
+  // Each tile gets pointer-based drag (more reliable than HTML5 drag on KaTeX spans)
+  const tiles = $("eqBox").querySelectorAll(".tile");
+  tiles.forEach(t => {
+    const id = t.id;
     const payload = payloadById.get(id);
     if(!payload) return;
 
-    el.setAttribute("draggable", "true");
-
-    el.addEventListener("dragstart", (e) => {
-      e.dataTransfer.setData("text/plain", id);
-      showDragPreview(el.textContent || "move");
+    // Center-ish hover target: use padding + border-radius already
+    // Force no text selection while dragging
+    t.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      dragPayload = payload;
+      t.setPointerCapture(e.pointerId);
+      t.style.background = "rgba(255,255,255,.08)";
+      t.style.outline = "1px solid rgba(255,255,255,.16)";
     });
-    el.addEventListener("dragend", () => hideDragPreview());
-  });
 
-  // drop zone behaviour
-  container.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    container.classList.add("dropActive");
-    moveDragPreview(e.clientX, e.clientY);
-  });
-  container.addEventListener("dragleave", () => container.classList.remove("dropActive"));
-  container.addEventListener("drop", (e) => {
-    e.preventDefault();
-    container.classList.remove("dropActive");
-    hideDragPreview();
-    const id = e.dataTransfer.getData("text/plain");
-    const payload = payloadById.get(id);
-    if(!payload){
-      setStatus(false, "Drop failed.");
-      return;
-    }
-    applyMove(payload, toSide);
+    t.addEventListener("pointerup", (e) => {
+      if(!dragPayload) return;
+      // drop side detection by x position relative to "=" in the rendered equation box
+      const box = $("eqBox").getBoundingClientRect();
+      const mid = box.left + box.width/2;
+      const toSide = (e.clientX < mid) ? "lhs" : "rhs";
+
+      // Only allow across-equals moves
+      if(dragPayload.kind === "term") moveTermAcross(dragPayload, toSide);
+      if(dragPayload.kind === "factor") moveFactorAcross(dragPayload, toSide);
+
+      dragPayload = null;
+      t.style.background = "transparent";
+      t.style.outline = "none";
+    });
+
+    t.addEventListener("pointercancel", () => { dragPayload = null; });
   });
 }
 
 function render(){
-  if(!state.current) return;
+  if(!window.katex) throw new Error("KaTeX not loaded.");
+  if(typeof window.nerdamer !== "function") throw new Error("Nerdamer not loaded.");
 
-  payloadById.clear();
-  nextId = 1;
+  const tex = buildEquationTeX(state.current.lhs, state.current.rhs);
 
-  const lhsTex = buildSideLatex("L", state.current.L);
-  const rhsTex = buildSideLatex("R", state.current.R);
+  $("eqBox").innerHTML = "";
+  katex.render(tex, $("eqBox"), {
+    displayMode: true,
+    throwOnError: false,
+    strict: "ignore",
+    trust: true   // REQUIRED for \htmlId / \htmlClass
+  });
 
-  clear($("lhsSide"));
-  clear($("rhsSide"));
-
-  // Render each side separately. Trust enabled so htmlData/htmlClass works.
-  katex.render(lhsTex, $("lhsSide"), { displayMode:true, throwOnError:false, strict:"ignore", trust:true });
-  katex.render(rhsTex, $("rhsSide"), { displayMode:true, throwOnError:false, strict:"ignore", trust:true });
-
-  // Attach handlers AFTER rendering
-  attachDragHandlers($("lhsSide"), "L");
-  attachDragHandlers($("rhsSide"), "R");
+  attachTileHandlers();
 }
 
-/* --- drag preview --- */
-function showDragPreview(text){ $("dragPreview").textContent = text; }
-function moveDragPreview(x,y){ $("dragPreview").style.transform = `translate(${x+18}px, ${y+18}px)`; }
-function hideDragPreview(){ $("dragPreview").style.transform = `translate(-9999px, -9999px)`; }
-window.addEventListener("dragover", (e) => moveDragPreview(e.clientX, e.clientY));
-
-function load(){
-  if(!window.nerdamer) throw new Error("Nerdamer not loaded. Check ./vendor/all.min.js path.");
-  if(!window.katex) throw new Error("KaTeX not loaded (CDN blocked?).");
-
-  const raw = $("eqInput").value;
-  const { L, R } = splitEquation(raw);
+function loadEquation(){
+  const raw = $("eqInput").value.trim();
+  const { lhs, rhs } = splitEquation(raw);
 
   // validate parse
-  nerd(L); nerd(R);
+  nerdamer(insertImplicitMul(lhs));
+  nerdamer(insertImplicitMul(rhs));
 
-  state.original = { L: normalize(L), R: normalize(R) };
+  state.original = { lhs: nerdNormalize(lhs), rhs: nerdNormalize(rhs) };
   state.current  = { ...state.original };
-  state.history  = [];
-  pushHistory("Loaded");
+  state.history  = [{ lhs: state.current.lhs, rhs: state.current.rhs, desc:"Loaded equation" }];
+
+  $("stepsText").textContent = `steps: 1`;
   render();
-  setStatus(true, "Loaded. Drag highlighted parts across '='.");
+  setStatus(true, "Loaded. Drag any highlighted top-level part across '='.");
 }
 
-function boot(){
-  try{
-    $("btnLoad").addEventListener("click", () => { try{ load(); } catch(e){ setStatus(false, e.message || String(e)); } });
-    $("btnUndo").addEventListener("click", () => undo());
-    $("btnReset").addEventListener("click", () => reset());
+/* --- UI --- */
+function setView(v){
+  state.view = v;
+  $("viewLabel").textContent = (v==="terms" ? "Terms" : "Factors");
+  render();
+  setStatus(true, `View: ${v}.`);
+}
 
-    load();
-  } catch(e){
+$("loadBtn").addEventListener("click", () => {
+  try{ loadEquation(); } catch(e){ setStatus(false, e.message || String(e)); }
+});
+$("undoBtn").addEventListener("click", () => {
+  try{ undo(); } catch(e){ setStatus(false, e.message || String(e)); }
+});
+$("resetBtn").addEventListener("click", () => {
+  try{ reset(); } catch(e){ setStatus(false, e.message || String(e)); }
+});
+
+// V toggles view
+window.addEventListener("keydown", (e) => {
+  if(e.key.toLowerCase() === "v"){
+    setView(state.view === "terms" ? "factors" : "terms");
+  }
+});
+
+// Boot
+(function boot(){
+  try{
+    setStatus(true, "Ready. Hit Load.");
+    loadEquation();
+  }catch(e){
     setStatus(false, e.message || String(e));
   }
-}
-boot();
+})();
 </script>
 </body>
 </html>
