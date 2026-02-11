@@ -58,4 +58,615 @@
     }
 
     .topbar{display:grid;grid-template-columns:1fr auto;gap:12px;margin-bottom:12px}
-    .actions{disp
+    .actions{display:flex;flex-direction:column;gap:10px}
+    .btn{
+      border:1px solid var(--stroke);
+      background:rgba(255,255,255,.08);
+      color:var(--text);
+      padding:10px 12px;border-radius:12px;
+      cursor:pointer;font-weight:700;font-size:13px;text-align:center;
+      user-select:none;
+    }
+    .btn:hover{background:rgba(255,255,255,.12)}
+    .btn.danger{
+      border-color: rgba(255,77,109,.5);
+      background: linear-gradient(180deg, rgba(255,77,109,.30), rgba(255,77,109,.12));
+    }
+    .btn.primary{
+      border-color: rgba(124,92,255,.5);
+      background: linear-gradient(180deg, rgba(124,92,255,.35), rgba(124,92,255,.18));
+    }
+
+    .status{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--muted)}
+    .dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.35)}
+    .dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)}
+
+    .bigEq{height:70vh;display:flex;align-items:center;justify-content:center;padding:16px;overflow:hidden}
+    .eqBox{
+      width:100%;height:100%;
+      border-radius:18px;border:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.18);
+      display:flex;align-items:center;justify-content:center;
+      padding:18px;
+      position:relative;
+    }
+    .eqRow{display:flex;align-items:center;justify-content:center;gap:14px;width:100%;max-width:1120px}
+    .eqEq{
+      font-family:var(--mono);
+      font-size: clamp(28px, 4vw, 64px);
+      color: rgba(255,255,255,.70);
+      user-select:none;
+    }
+    math-field.big{
+      flex:1 1 0;min-width:280px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.12);
+      border-radius:14px;
+      padding:12px 14px;
+      font-size: clamp(26px, 3.6vw, 56px);
+      --caret-color: rgba(255,255,255,.95);
+      --selection-background-color: rgba(124,92,255,.25);
+    }
+    @media (max-width: 980px){
+      .topbar{grid-template-columns:1fr}
+      .actions{flex-direction:row;flex-wrap:wrap}
+      .eqRow{flex-direction:column}
+      .eqEq{display:none}
+      math-field.big{width:100%}
+    }
+
+    .dragPreview{
+      position:fixed;left:0;top:0;
+      transform: translate(-9999px, -9999px);
+      pointer-events:none;z-index:9999;
+      padding:12px 14px;border-radius:14px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(0,0,0,.55);
+      backdrop-filter: blur(10px);
+      box-shadow:0 20px 50px rgba(0,0,0,.45);
+      font-family:var(--mono);
+      color:rgba(255,255,255,.95);
+      font-size:26px;
+      max-width:min(80vw, 980px);
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
+
+    .debug{
+      margin-top:8px;padding:10px;border-radius:12px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(0,0,0,.18);
+      font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.8);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Drag Equation Transposer</h1>
+        <p class="sub">
+          Select a <b>top-level term</b> or <b>top-level factor</b>, then drag it across <span style="font-family:var(--mono)">=</span>.
+          Internal pieces (e.g. <span style="font-family:var(--mono)">-v_i</span> inside <span style="font-family:var(--mono)">(v_f-v_i)</span>) are <b>illegal</b>.
+        </p>
+      </div>
+      <div class="pill">Mode: <span id="modeText">Auto</span></div>
+    </header>
+
+    <div class="topbar">
+      <div class="card pad">
+        <div class="sub" style="margin:0 0 8px">
+          Start equation is: <span style="font-family:var(--mono)">a=(v_f-v_i)/t</span>
+          (subscripts render nicely as <span style="font-family:var(--mono)">v_{f}</span>, <span style="font-family:var(--mono)">v_{i}</span>)
+        </div>
+        <div class="status">
+          <span class="dot" id="statusDot"></span>
+          <span id="statusText">Booting…</span>
+        </div>
+        <div class="debug" id="debugText">—</div>
+      </div>
+      <div class="actions">
+        <div class="btn primary" id="btnLoad">Load default</div>
+        <div class="btn" id="btnUndo">Undo</div>
+        <div class="btn danger" id="btnReset">Reset</div>
+      </div>
+    </div>
+
+    <div class="card bigEq">
+      <div class="eqBox" id="eqBox">
+        <div class="eqRow">
+          <math-field id="mfL" class="big"></math-field>
+          <div class="eqEq" id="eqMid">=</div>
+          <math-field id="mfR" class="big"></math-field>
+        </div>
+      </div>
+    </div>
+
+    <div class="dragPreview" id="dragPreview"></div>
+  </div>
+
+<script>
+/** Optional: suppress noisy Chrome ResizeObserver warning */
+window.addEventListener('error', (e) => {
+  if (String(e.message || '').includes('ResizeObserver loop')) e.stopImmediatePropagation();
+}, true);
+
+const $ = (id) => document.getElementById(id);
+
+function setStatus(ok, msg){
+  $("statusDot").className = "dot " + (ok ? "ok" : "bad");
+  $("statusText").textContent = msg;
+}
+function dbg(msg){ $("debugText").textContent = msg; }
+
+async function waitForMathField(){
+  if (customElements.get("math-field")) return;
+  await customElements.whenDefined("math-field");
+}
+async function waitForNerdamer(timeoutMs=6000){
+  const t0 = Date.now();
+  while(!window.nerdamer){
+    if(Date.now() - t0 > timeoutMs) throw new Error("Nerdamer not loaded. Check ./vendor/all.min.js path.");
+    await new Promise(r => setTimeout(r, 50));
+  }
+}
+
+/** -----------------------------
+ *  Engine helpers (Nerdamer)
+ * ------------------------------*/
+function nerd(expr){ return window.nerdamer(expr); }
+
+/** Keep expressions stable: avoid expand() unless asked */
+function canonical(expr){
+  return nerd(expr).simplify().toString();
+}
+
+/** -----------------------------
+ *  LaTeX -> engine string (minimal, robust for our use)
+ *  Supports: variables, subscripts, parentheses, + - * /, \frac
+ * ------------------------------*/
+function stripLatexNoise(lx){
+  return String(lx)
+    .replace(/\\left/g,'')
+    .replace(/\\right/g,'')
+    .replace(/\\,/g,'')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+function latexSubscriptsToUnderscore(lx){
+  // v_{f} -> v_f
+  return lx.replace(/([A-Za-z])_\{([^}]+)\}/g, (_, a, b) => `${a}_${b}`);
+}
+
+/** Convert \frac{A}{B} to (A)/(B) recursively */
+function latexFracToSlash(lx){
+  let s = lx;
+
+  function parseGroup(str, i){
+    // expects str[i] == '{'
+    let depth = 0;
+    let start = i;
+    for(; i < str.length; i++){
+      if(str[i] === '{') depth++;
+      else if(str[i] === '}'){
+        depth--;
+        if(depth === 0){
+          return { content: str.slice(start+1, i), end: i+1 };
+        }
+      }
+    }
+    return null;
+  }
+
+  while(true){
+    const idx = s.indexOf('\\frac');
+    if(idx < 0) break;
+    let i = idx + 5;
+    while(s[i] === ' ') i++;
+    if(s[i] !== '{') break;
+    const g1 = parseGroup(s, i);
+    if(!g1) break;
+    i = g1.end;
+    while(s[i] === ' ') i++;
+    if(s[i] !== '{') break;
+    const g2 = parseGroup(s, i);
+    if(!g2) break;
+
+    const A = latexFracToSlash(g1.content);
+    const B = latexFracToSlash(g2.content);
+    const rep = `((${A}))/(((${B})))`;
+
+    s = s.slice(0, idx) + rep + s.slice(g2.end);
+  }
+  return s;
+}
+
+function latexToEngine(latex){
+  let s = stripLatexNoise(latex);
+  s = latexSubscriptsToUnderscore(s);
+  s = latexFracToSlash(s);
+  s = s
+    .replace(/\\cdot/g,'*')
+    .replace(/\\times/g,'*')
+    .replace(/\\div/g,'/')
+    .replace(/[{}]/g,'')              // after frac conversion, remaining braces are usually safe to drop
+    .replace(/\\,/g,'')
+    .replace(/\s+/g,'')
+    ;
+
+  // common latex minus is just '-'; keep
+  // implicit multiplication: we do NOT attempt full implicit parse.
+  // Students should select complete top-level pieces; engine side is managed by us.
+  return s;
+}
+
+/** -----------------------------
+ *  Top-level decomposition (string-based, paren depth)
+ * ------------------------------*/
+function splitTopLevelAdd(expr){
+  const s = canonical(expr);
+  const out = [];
+  let depth = 0;
+  let buf = "";
+  let sign = +1;
+
+  function flush(){
+    const t = buf.trim();
+    if(t) out.push({ sign, text: t });
+    buf = "";
+  }
+
+  for(let i=0;i<s.length;i++){
+    const ch = s[i];
+    if(ch === "(") depth++;
+    if(ch === ")") depth--;
+    if(depth === 0 && (ch === "+" || ch === "-")){
+      flush();
+      sign = (ch === "+") ? +1 : -1;
+    } else {
+      buf += ch;
+    }
+  }
+  flush();
+  return out.length ? out : [{ sign:+1, text:s.trim() }];
+}
+
+function splitTopLevelMul(expr){
+  const s = canonical(expr);
+  let depth = 0;
+  let buf = "";
+  let mode = "num";
+  const num = [];
+  const den = [];
+
+  function flush(){
+    const t = buf.trim();
+    if(t) (mode === "num" ? num : den).push(t);
+    buf = "";
+  }
+
+  for(let i=0;i<s.length;i++){
+    const ch = s[i];
+    if(ch === "(") depth++;
+    if(ch === ")") depth--;
+    if(depth === 0 && (ch === "*" || ch === "/")){
+      flush();
+      mode = (ch === "/") ? "den" : "num";
+    } else {
+      buf += ch;
+    }
+  }
+  flush();
+
+  if(num.length === 0 && den.length === 0) return { num:[s.trim()], den:[] };
+  if(num.length === 0) num.push("1");
+  return { num, den };
+}
+
+/** -----------------------------
+ *  State + rendering
+ * ------------------------------*/
+let original = null;
+let current = null;
+let history = [];
+
+function push(desc){
+  history.push({ L: current.L, R: current.R, desc });
+}
+function syncFields(){
+  const mfL = $("mfL"), mfR = $("mfR");
+  mfL.setValue(nerd(current.L).toTeX ? nerd(current.L).toTeX() : nerd(current.L).text("latex"), {format:"latex"});
+  mfR.setValue(nerd(current.R).toTeX ? nerd(current.R).toTeX() : nerd(current.R).text("latex"), {format:"latex"});
+  dbg(`${current.L} = ${current.R}   | steps: ${Math.max(0, history.length-1)}`);
+}
+function undo(){
+  if(history.length <= 1){ setStatus(false, "Nothing to undo."); return; }
+  history.pop();
+  const prev = history[history.length-1];
+  current = { L: prev.L, R: prev.R };
+  syncFields();
+  setStatus(true, "Undone.");
+}
+function reset(){
+  if(!original){ setStatus(false, "Not ready."); return; }
+  current = { ...original };
+  history = [];
+  push("Reset");
+  syncFields();
+  setStatus(true, "Reset.");
+}
+function loadDefault(){
+  // keep RHS as single fraction; don't auto-expand
+  original = { L: canonical("a"), R: canonical("((v_f-v_i)/t)") };
+  current  = { ...original };
+  history  = [];
+  push("Loaded default");
+  syncFields();
+  setStatus(true, "Loaded. Select a top-level term/factor and drag across =");
+}
+
+/** -----------------------------
+ *  Legality checking + move application
+ * ------------------------------*/
+function sideOfField(mf){ return (mf === $("mfL")) ? "L" : "R"; }
+function otherSide(side){ return side === "L" ? "R" : "L"; }
+
+function getSideExpr(side){ return side === "L" ? current.L : current.R; }
+function setSideExpr(side, expr){
+  if(side === "L") current.L = expr;
+  else current.R = expr;
+}
+
+function illegal(msg){
+  // snap back to last valid
+  syncFields();
+  setStatus(false, msg);
+}
+
+function legal(msg){
+  push(msg);
+  syncFields();
+  setStatus(true, msg);
+}
+
+/**
+ * Determine if selection is a legal "top-level unit" on that side:
+ * - term: matches one of top-level add/sub terms (including sign)
+ * - factor-num/factor-den: matches one of top-level mul/div factors in num/den
+ */
+function classifySelectionOnSide(selExprEngine, side){
+  const sideExpr = getSideExpr(side);
+
+  // Canonicalise selection
+  let selCan;
+  try { selCan = canonical(selExprEngine); }
+  catch { return { ok:false, reason:"Selection not parseable." }; }
+
+  // 1) Terms
+  const terms = splitTopLevelAdd(sideExpr).map(t => {
+    const signed = (t.sign === 1) ? `(${t.text})` : `-(${t.text})`;
+    return canonical(signed);
+  });
+  if(terms.includes(selCan)){
+    return { ok:true, kind:"term", expr: selCan };
+  }
+
+  // 2) Factors (num/den)
+  const f = splitTopLevelMul(sideExpr);
+  const num = f.num.map(x => canonical(x));
+  const den = f.den.map(x => canonical(x));
+
+  if(num.includes(selCan)) return { ok:true, kind:"factor", where:"num", expr: selCan };
+  if(den.includes(selCan)) return { ok:true, kind:"factor", where:"den", expr: selCan };
+
+  // Not top-level
+  return {
+    ok:false,
+    reason:"Illegal: selection is not a top-level term/factor on that side (it’s inside a group)."
+  };
+}
+
+/** Apply transpose across '=' */
+function transpose(classification, fromSide, toSide){
+  // term move: subtract that signed term from both sides (cancels at source)
+  if(classification.kind === "term"){
+    const e = classification.expr; // signed term, canonical
+    const L = canonical(`(${current.L}) - (${e})`);
+    const R = canonical(`(${current.R}) - (${e})`);
+    current = { L, R };
+    legal(`Moved term across = (legal top-level term).`);
+    return;
+  }
+
+  // factor move:
+  // If factor is in numerator on source side -> divide both sides by factor
+  // If factor is in denominator on source side -> multiply both sides by factor
+  if(classification.kind === "factor"){
+    const f = classification.expr;
+    let L, R;
+    if(classification.where === "num"){
+      L = canonical(`(${current.L})/(${f})`);
+      R = canonical(`(${current.R})/(${f})`);
+      current = { L, R };
+      legal(`Moved numerator factor across = (divide both sides).`);
+      return;
+    }
+    if(classification.where === "den"){
+      L = canonical(`(${current.L})*(${f})`);
+      R = canonical(`(${current.R})*(${f})`);
+      current = { L, R };
+      legal(`Moved denominator factor across = (multiply both sides).`);
+      return;
+    }
+  }
+
+  illegal("Illegal move.");
+}
+
+/** -----------------------------
+ *  Drag UX from equation selection
+ * ------------------------------*/
+let drag = {
+  active:false,
+  fromSide:null,
+  selectionLatex:"",
+  selectionEngine:"",
+  classification:null
+};
+
+function showDragPreview(text){
+  const el = $("dragPreview");
+  el.textContent = text || "";
+  el.style.transform = `translate(-9999px,-9999px)`;
+}
+function moveDragPreview(x, y){
+  $("dragPreview").style.transform = `translate(${x+18}px, ${y+18}px)`;
+}
+function hideDragPreview(){
+  $("dragPreview").style.transform = `translate(-9999px,-9999px)`;
+}
+
+function getSelectedLatex(mf){
+  // Modern API: mf.getValue(mf.selection) returns latex fragment of selection. :contentReference[oaicite:0]{index=0}
+  try{
+    const sel = mf.selection;
+    if(!sel) return "";
+    // selection is an array of ranges; pass it directly
+    return mf.getValue(sel);
+  } catch {
+    return "";
+  }
+}
+
+function beginDragFrom(mf, clientX, clientY){
+  const side = sideOfField(mf);
+
+  // if no selection, don't drag
+  const selectedLatex = getSelectedLatex(mf);
+  if(!selectedLatex || !selectedLatex.trim()){
+    return;
+  }
+
+  const selEngine = latexToEngine(selectedLatex);
+  if(!selEngine){
+    illegal("Selection empty.");
+    return;
+  }
+
+  const cls = classifySelectionOnSide(selEngine, side);
+  if(!cls.ok){
+    drag.active = false;
+    illegal(cls.reason);
+    return;
+  }
+
+  drag.active = true;
+  drag.fromSide = side;
+  drag.selectionLatex = selectedLatex;
+  drag.selectionEngine = selEngine;
+  drag.classification = cls;
+
+  $("modeText").textContent = (cls.kind === "term") ? "Term" : (cls.where === "den" ? "Den factor" : "Num factor");
+
+  showDragPreview(selectedLatex.replace(/\s+/g,' ').trim());
+  moveDragPreview(clientX, clientY);
+  setStatus(true, "Dragging… drop on the other side.");
+}
+
+function endDragAt(clientX, clientY){
+  if(!drag.active) return;
+
+  // decide target side by x position relative to the '=' center
+  const mid = $("eqMid").getBoundingClientRect();
+  const toSide = (clientX < (mid.left + mid.right)/2) ? "L" : "R";
+  const fromSide = drag.fromSide;
+
+  hideDragPreview();
+
+  // must drop on opposite side to be a transpose
+  if(toSide === fromSide){
+    drag.active = false;
+    illegal("Drop on the other side of '=' to transpose.");
+    return;
+  }
+
+  // apply move (already classified as legal top-level unit)
+  try{
+    transpose(drag.classification, fromSide, toSide);
+  } catch(e){
+    drag.active = false;
+    illegal("Move failed: " + (e.message || String(e)));
+    return;
+  }
+
+  drag.active = false;
+}
+
+function attachDragHandlers(mf){
+  mf.addEventListener("pointerdown", (e) => {
+    // let selection happen first; start drag only if selection exists
+    // we start on pointermove threshold
+    const startX = e.clientX, startY = e.clientY;
+    const startSide = sideOfField(mf);
+
+    let moved = false;
+
+    function onMove(ev){
+      const dx = Math.abs(ev.clientX - startX);
+      const dy = Math.abs(ev.clientY - startY);
+      if(!moved && (dx + dy) > 6){
+        moved = true;
+        beginDragFrom(mf, ev.clientX, ev.clientY);
+      }
+      if(drag.active) moveDragPreview(ev.clientX, ev.clientY);
+    }
+    function onUp(ev){
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      endDragAt(ev.clientX, ev.clientY);
+    }
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  });
+}
+
+/** -----------------------------
+ *  Boot
+ * ------------------------------*/
+async function boot(){
+  setStatus(true, "Loading libraries…");
+  dbg("Waiting for MathLive…");
+  await waitForMathField();
+  dbg("MathLive OK. Waiting for Nerdamer…");
+  await waitForNerdamer(7000);
+  dbg("Nerdamer OK.");
+
+  const mfL = $("mfL"), mfR = $("mfR");
+
+  // Make MathLive behave like a clean editor
+  mfL.virtualKeyboardMode = "off";
+  mfR.virtualKeyboardMode = "off";
+  mfL.smartFence = true;
+  mfR.smartFence = true;
+  mfL.readOnly = false;
+  mfR.readOnly = false;
+
+  attachDragHandlers(mfL);
+  attachDragHandlers(mfR);
+
+  $("btnLoad").addEventListener("click", loadDefault);
+  $("btnUndo").addEventListener("click", undo);
+  $("btnReset").addEventListener("click", reset);
+
+  loadDefault();
+}
+
+boot().catch(err => {
+  setStatus(false, err.message || String(err));
+  dbg(String(err.stack || err));
+});
+</script>
+</body>
+</html>
