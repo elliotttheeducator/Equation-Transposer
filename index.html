@@ -3,201 +3,59 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Equation Transposer</title>
+  <title>Drag Equation Transposer (Legal Moves)</title>
 
   <!-- Nerdamer (LOCAL) -->
   <script src="./vendor/all.min.js"></script>
 
-  <!-- MathLive (jsDelivr) -->
- <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive.core.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive.css">
-<script src="https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive.min.js"></script>
-
+  <!-- MathLive (CDN) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive.core.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive.css">
+  <script src="https://cdn.jsdelivr.net/npm/mathlive/dist/mathlive.min.js"></script>
 
   <style>
     :root{
-      --bg:#0b1220; --card:rgba(255,255,255,.06); --stroke:rgba(255,255,255,.12);
-      --text:rgba(255,255,255,.92); --muted:rgba(255,255,255,.65);
-      --ok:#34d399; --bad:#ff4d6d;
+      --bg:#0b1220;
+      --card:rgba(255,255,255,.06);
+      --stroke:rgba(255,255,255,.12);
+      --text:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.65);
+      --ok:#34d399;
+      --bad:#ff4d6d;
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
     }
     *{box-sizing:border-box}
     body{
-      margin:0;font-family:var(--sans);color:var(--text);
+      margin:0;
+      font-family:var(--sans);
+      color:var(--text);
       background:
         radial-gradient(1200px 600px at 10% 10%, rgba(124,92,255,.25), transparent 60%),
         radial-gradient(900px 500px at 90% 20%, rgba(45,212,191,.18), transparent 55%),
         radial-gradient(1000px 700px at 50% 120%, rgba(255,77,109,.10), transparent 55%),
         var(--bg);
     }
-    .wrap{max-width:1200px;margin:0 auto;padding:22px 16px 28px}
-    .card{border:1px solid var(--stroke);background:linear-gradient(180deg,var(--card),rgba(255,255,255,.04));
-      border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.28);backdrop-filter: blur(10px)}
+    .wrap{max-width:1200px;margin:0 auto;padding:18px 14px 26px}
+    .card{
+      border:1px solid var(--stroke);
+      background:linear-gradient(180deg, var(--card), rgba(255,255,255,.04));
+      border-radius:16px;
+      box-shadow:0 10px 30px rgba(0,0,0,.28);
+      backdrop-filter: blur(10px);
+    }
     .pad{padding:12px}
-    .topbar{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:start;margin-bottom:12px}
-    .actions{display:flex;flex-direction:column;gap:10px}
-    .btn{border:1px solid var(--stroke);background:rgba(255,255,255,.08);color:var(--text);
-      padding:10px 12px;border-radius:12px;cursor:pointer;font-weight:700;font-size:13px;text-align:center}
-    .btn:hover{background:rgba(255,255,255,.12)}
-    .btn.danger{border-color: rgba(255,77,109,.5);background: linear-gradient(180deg, rgba(255,77,109,.30), rgba(255,77,109,.12))}
-    .status{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--muted)}
-    .dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.35)}
-    .dot.ok{background:var(--ok)} .dot.bad{background:var(--bad)}
-    .bigEq{height:70vh;display:flex;align-items:center;justify-content:center;padding:18px}
-    .eqBox{width:100%;height:100%;border-radius:18px;border:1px solid rgba(255,255,255,.10);
-      background:rgba(0,0,0,.18);display:flex;align-items:center;justify-content:center;padding:18px}
-    .eqRow{display:flex;align-items:center;justify-content:center;gap:16px;width:100%;max-width:1100px}
-    .eqEq{font-family:var(--mono);font-size: clamp(28px, 4vw, 64px);color: rgba(255,255,255,.78);user-select:none}
-    math-field.big{
-      flex:1 1 0;min-width:280px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.12);
-      border-radius:14px;padding:14px 16px;font-size: clamp(26px, 3.6vw, 56px);
-      --caret-color: rgba(255,255,255,.95); --selection-background-color: rgba(124,92,255,.25);
+
+    header{display:flex;justify-content:space-between;gap:10px;align-items:flex-end;margin-bottom:10px;flex-wrap:wrap}
+    h1{margin:0;font-size:18px}
+    .sub{margin:0;color:var(--muted);font-size:12.5px;line-height:1.25}
+    .pill{
+      display:inline-flex;align-items:center;gap:8px;
+      border:1px solid var(--stroke);
+      background:rgba(255,255,255,.06);
+      padding:6px 10px;border-radius:999px;
+      font-size:12px;color:var(--muted);font-family:var(--mono);
     }
-    @media (max-width: 980px){
-      .topbar{grid-template-columns:1fr}
-      .actions{flex-direction:row;flex-wrap:wrap}
-      .eqRow{flex-direction:column}
-      .eqEq{display:none}
-      math-field.big{width:100%}
-    }
-    .tiny{font-family:var(--mono);font-size:12px;color:rgba(255,255,255,.85)}
-    .help{color:var(--muted);font-size:12px;line-height:1.35}
-    .debug{margin-top:8px;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.10);background:rgba(0,0,0,.18)}
-  </style>
-</head>
 
-<body>
-  <div class="wrap">
-    <div class="topbar">
-      <div class="card pad">
-        <div class="help">
-          Test this loads Nerdamer: <span class="tiny">./vendor/all.min.js</span><br/>
-          If it fails, you’ll see a clear error below.
-        </div>
-        <div class="status">
-          <span class="dot" id="statusDot"></span>
-          <span id="statusText">Booting…</span>
-        </div>
-        <div class="debug tiny" id="debugText">Waiting…</div>
-      </div>
-      <div class="actions">
-        <div class="btn" id="btnUndo">Undo</div>
-        <div class="btn danger" id="btnReset">Reset</div>
-      </div>
-    </div>
-
-    <div class="card bigEq">
-      <div class="eqBox" id="eqBox">
-        <div class="eqRow">
-          <math-field id="mfL" class="big"></math-field>
-          <div class="eqEq">=</div>
-          <math-field id="mfR" class="big"></math-field>
-        </div>
-      </div>
-    </div>
-  </div>
-
-<script>
-const $ = (id) => document.getElementById(id);
-
-function setStatus(ok, msg){
-  $("statusDot").className = "dot " + (ok ? "ok" : "bad");
-  $("statusText").textContent = msg;
-}
-function dbg(msg){ $("debugText").textContent = msg; }
-
-window.addEventListener("error", (e) => {
-  setStatus(false, "JS error: " + (e.message || "unknown"));
-  dbg(String(e.error?.stack || e.message || e));
-});
-
-async function waitForMathField(){
-  if (customElements.get("math-field")) return;
-  await customElements.whenDefined("math-field");
-}
-async function waitForNerdamer(timeoutMs=5000){
-  const t0 = Date.now();
-  while(!window.nerdamer){
-    if(Date.now() - t0 > timeoutMs) throw new Error("Nerdamer not loaded. Check ./vendor/all.min.js path (404?)");
-    await new Promise(r => setTimeout(r, 50));
-  }
-}
-
-let history = [];
-let original = null;
-let current = null;
-
-function normalize(expr){
-  return window.nerdamer(expr).simplify().toString();
-}
-function nerdToLatex(expr){
-  const n = window.nerdamer(expr).simplify();
-  if(typeof n.toTeX === "function") return n.toTeX();
-  if(typeof n.text === "function") return n.text("latex");
-  return n.toString();
-}
-
-function push(desc){
-  history.push({ L: current.L, R: current.R, desc });
-}
-
-function syncFields(){
-  const mfL = $("mfL"), mfR = $("mfR");
-  mfL.setValue(nerdToLatex(current.L), {format:"latex"});
-  mfR.setValue(nerdToLatex(current.R), {format:"latex"});
-  dbg(`OK: nerdamer=${!!window.nerdamer}, math-field=${!!customElements.get("math-field")} | ${current.L} = ${current.R}`);
-}
-
-function undo(){
-  if(history.length <= 1) return setStatus(false, "Nothing to undo.");
-  history.pop();
-  const prev = history[history.length-1];
-  current = { L: prev.L, R: prev.R };
-  syncFields();
-  setStatus(true, "Undone.");
-}
-function reset(){
-  if(!original) return setStatus(false, "Not ready.");
-  current = { ...original };
-  history = [];
-  push("Reset");
-  syncFields();
-  setStatus(true, "Reset.");
-}
-
-async function boot(){
-  setStatus(true, "Loading libraries…");
-  dbg("Waiting for MathLive + Nerdamer…");
-
-  await waitForMathField();
-  await waitForNerdamer(7000);
-
-  // init mathfields
-  const mfL = $("mfL"), mfR = $("mfR");
-  mfL.virtualKeyboardMode = "off";
-  mfR.virtualKeyboardMode = "off";
-  mfL.smartFence = true;
-  mfR.smartFence = true;
-
-  // set initial equation
-  original = { L: normalize("a"), R: normalize("((v_f-v_i)/t)") };
-  current  = { ...original };
-  history  = [];
-  push("Loaded");
-  syncFields();
-
-  $("btnUndo").addEventListener("click", undo);
-  $("btnReset").addEventListener("click", reset);
-
-  setStatus(true, "Ready (fields should be filled).");
-}
-
-boot().catch(err => {
-  setStatus(false, err.message || String(err));
-  dbg(String(err.stack || err));
-});
-</script>
-</body>
-</html>
-
+    .topbar{display:grid;grid-template-columns:1fr auto;gap:12px;margin-bottom:12px}
+    .actions{disp
