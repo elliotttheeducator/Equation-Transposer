@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Pro Logic Transposer</title>
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css">
+  <style>
+    :root { --bg: #0f172a; --surface: #1e293b; --accent: #3b82f6; --text: #f8fafc; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
+    
+    /* Top Bar */
+    .ui { padding: 1rem; background: var(--surface); display: flex; gap: 10px; border-bottom: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); z-index: 10;}
+    input { flex: 1; background: #0f172a; border: 1px solid #334155; color: #60a5fa; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 1.1rem; outline: none; transition: border 0.2s; }
+    input:focus { border-color: var(--accent); }
+    button { background: var(--accent); border: none; color: white; padding: 0 20px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: filter 0.2s; }
+    button:hover { filter: brightness(1.1); }
+    
+    /* Arena */
+    .arena { flex: 1; display: flex; justify-content: center; align-items: center; font-size: 3rem; position: relative; }
+    .side { display: flex; align-items: center; min-width: 80px; justify-content: center; padding: 20px; transition: background 0.2s; border-radius: 12px; }
+    .side.drag-over { background: rgba(59, 130, 246, 0.1); }
+    
+    /* Mathematical Structures */
+    .term-group { display: flex; align-items: center; margin: 0 2px; position: relative; }
+    
+    /* The Tile */
+    .tile { 
+        padding: 4px 8px; border-radius: 6px; cursor: grab; 
+        transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s; 
+        border: 1px solid transparent; 
+        display: inline-flex; align-items: center; justify-content: center;
+        user-select: none;
+    }
+    .tile:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); }
+    .tile:active { cursor: grabbing; transform: scale(1.05); background: rgba(59, 130, 246, 0.2); border-color: var(--accent); }
+    
+    /* Fractions */
+    .fraction { display: flex; flex-direction: column; align-items: center; margin: 0 15px; }
+    .frac-num { display: flex; align-items: center; justify-content: center; padding-bottom: 4px; }
+    .frac-den { display: flex; align-items: center; justify-content: center; padding-top: 4px; }
+    .frac-line { width: 100%; height: 2px; background: currentColor; border-radius: 2px; opacity: 0.8; }
+    
+    /* Operators */
+    .op { margin: 0 8px; color: #94a3b8; font-weight: 300; font-size: 0.8em; }
+    .eq { margin: 0 40px; font-size: 1.2em; opacity: 0.8; }
+    
+    /* Debug/Toast */
+    #toast { position: fixed; bottom: 20px; right: 20px; background: var(--surface); padding: 10px 20px; border-radius: 8px; border: 1px solid #334155; display: none; }
+  </style>
+</head>
+<body>
+
+<div class="ui">
+  <input id="eqInput" value="2*x + 2 = a + 2" spellcheck="false">
+  <button onclick="init()">Load Equation</button>
+  <button onclick="undo()" style="background:#475569">Undo</button>
+</div>
+
+<div class="arena">
+  <div id="LHS" class="side"></div>
+  <div class="eq">=</div>
+  <div id="RHS" class="side"></div>
+</div>
+<div id="toast"></div>
+
+<script>
+  // --- STATE MANAGEMENT ---
+  // A Side has 'terms' (Numerator terms) and 'den' (Denominator factors)
+  // Each Term is an array of factors. E.g. "2x" is ['2', 'x']
+  let state = { LHS: { terms: [], den: [] }, RHS: { terms: [], den: [] }, history: [] };
+
+  function init() {
+    save();
+    const input = document.getElementById('eqInput').value;
+    const [l, r] = input.split('=');
+    state.LHS = parseSide(l);
+    state.RHS = parseSide(r);
+    simplifyAll();
+    render();
+  }
+
+  function parseSide(str) {
+    if (!str) return { terms: [], den: [] };
+    let [n, d] = str.includes('/') ? str.split('/') : [str, ""];
+    
+    // Parse Numerator: Split by + or - (keeping signs)
+    // "2x - 5" -> ["2x", "-5"]
+    const rawTerms = n.replace(/[()]/g, '').replace(/\s+/g, '').split(/(?=[+-])/);
+    const terms = rawTerms.map(t => {
+        // Remove leading +
+        let clean = t.startsWith('+') ? t.substring(1) : t;
+        // Split into factors by '*' or implicit multiplication is handled by treating as one string for now unless separated
+        // For Pro version, we treat "2x" as factors ["2", "x"] if explicitly separated by * in input or standard parsing
+        return splitFactors(clean);
+    }).filter(t => t.length > 0);
+
+    // Parse Denominator
+    const den = d ? splitFactors(d.replace(/[()]/g, '').trim()) : [];
+    
+    return { terms, den };
+  }
+
+  function splitFactors(str) {
+    // Basic factor splitter: handles "2*x" or "2x" separation
+    // Strategy: Split by '*' first. Then check for number-letter boundaries? 
+    // For safety/predictability, let's rely on explicit '*' or simple separate blocks for now, 
+    // OR just split numbers from vars.
+    if(str.includes('*')) return str.split('*').map(s=>s.trim());
+    
+    // Regex to split coefficient from variables if sticking together (e.g. "2x")
+    const match = str.match(/^(-?\d+\.?\d*)([a-zA-Z].*)?$/);
+    if (match) {
+        let res = [match[1]];
+        if(match[2]) res.push(match[2]);
+        return res;
+    }
+    return [str];
+  }
+
+  // --- RENDERING ---
+  function render() {
+    renderSide('LHS');
+    renderSide('RHS');
+  }
+
+  function renderSide(id) {
+    const el = document.getElementById(id);
+    el.innerHTML = '';
+    const side = state[id];
+    
+    // Helper to render terms
+    const renderTermsBox = (terms, loc) => {
+        const box = document.createElement('div');
+        box.className = loc === 'num' ? 'frac-num' : 'frac-den';
+        
+        terms.forEach((term, tIdx) => {
+            // Add Operator (+/-)
+            if (tIdx > 0) {
+                const op = document.createElement('span');
+                op.className = 'op';
+                // Check sign of first factor
+                const first = term[0];
+                op.innerHTML = (first.startsWith('-')) ? '−' : '+'; // KaTeX minus
+                box.appendChild(op);
+            }
+
+            const group = document.createElement('div');
+            group.className = 'term-group';
+            
+            term.forEach((factor, fIdx) => {
+                let val = factor;
+                // Visual cleanup: If it's the first factor of a term after the first term, strip the sign (handled by op)
+                if (tIdx > 0 && fIdx === 0 && val.startsWith('-')) val = val.substring(1);
+                // If it's the very first term, allow the sign
+                
+                group.appendChild(createTile(val, id, loc, tIdx, fIdx));
+            });
+            box.appendChild(group);
+        });
+        if(terms.length === 0) { // Placeholder for empty numerator
+             // Optional: render invisible box or "1" if needed
+        }
+        return box;
+    };
+
+    if (side.den.length > 0) {
+        const frac = document.createElement('div');
+        frac.className = 'fraction';
+        
+        frac.appendChild(renderTermsBox(side.terms, 'num'));
+        
+        const line = document.createElement('div');
+        line.className = 'frac-line';
+        frac.appendChild(line);
+        
+        // Denom is effectively one big term of factors
+        const dBox = document.createElement('div');
+        dBox.className = 'frac-den';
+        side.den.forEach((f, i) => {
+             dBox.appendChild(createTile(f, id, 'den', 0, i));
+        });
+        frac.appendChild(dBox);
+        
+        el.appendChild(frac);
+    } else {
+        el.appendChild(renderTermsBox(side.terms, 'num'));
+    }
+  }
+
+  function createTile(val, sideId, loc, tIdx, fIdx) {
+    const el = document.createElement('div');
+    el.className = 'tile';
+    el.innerHTML = katex.renderToString(val);
+    
+    el.onpointerdown = (e) => {
+        el.setPointerCapture(e.pointerId);
+        e.stopPropagation();
+        
+        el.onpointerup = (upE) => {
+            const rect = document.body.getBoundingClientRect();
+            const mid = rect.width / 2;
+            const crossed = (upE.clientX < mid && sideId === 'RHS') || (upE.clientX > mid && sideId === 'LHS');
+            
+            if (crossed) {
+                moveItem(sideId, loc, tIdx, fIdx);
+            }
+        };
+    };
+    return el;
+  }
+
+  // --- LOGIC CORE ---
+  function moveItem(fromSide, fromLoc, tIdx, fIdx) {
+    save();
+    const toSide = fromSide === 'LHS' ? 'RHS' : 'LHS';
+    const source = state[fromSide];
+    const target = state[toSide];
+    
+    // Extract Value
+    let val = (fromLoc === 'num') ? source.terms[tIdx].splice(fIdx, 1)[0] : source.den.splice(fIdx, 1)[0];
+    
+    // Logic Gate: Where does it go?
+    
+    // CASE 1: Basement Escape (Denom -> Num)
+    // Moving from Denominator always implies multiplication on the other side.
+    if (fromLoc === 'den') {
+        // It multiplies the entire numerator. 
+        // In our structure, we append it to the first term or distribute. 
+        // For simple transposing, let's treat it as becoming a factor of the first term (simplification handles the rest)
+        if (target.terms.length === 0) target.terms.push([]);
+        target.terms[0].push(val); 
+    }
+    
+    // CASE 2: The Glue Factor (Factor -> Denom)
+    // If dragging a factor from a multi-factor term (e.g., '2' from '2x'), OR dragging to a side with a denominator
+    else if ( (fromLoc === 'num' && source.terms[tIdx].length > 0) || target.den.length > 0) {
+        target.den.push(val);
+    }
+    
+    // CASE 3: Independent Term (Term -> Term)
+    // Dragging the last remaining factor of a term (e.g. '2' from a standalone '2')
+    else {
+        // Flip Sign
+        val = invertSign(val);
+        target.terms.push([val]);
+    }
+    
+    // Cleanup empty containers
+    if (fromLoc === 'num' && source.terms[tIdx].length === 0) source.terms.splice(tIdx, 1);
+    
+    simplifyAll();
+    render();
+  }
+
+  function invertSign(val) {
+    if (val.startsWith('-')) return val.substring(1);
+    return '-' + val;
+  }
+
+  // --- SIMPLIFICATION ENGINE (The "Pro" feature) ---
+  function simplifyAll() {
+    simplifySide(state.LHS);
+    simplifySide(state.RHS);
+  }
+
+  function simplifySide(s) {
+    // 1. FACTOR CRUNCH: Combine constants inside terms (e.g. 2 * 3 * x -> 6x)
+    s.terms.forEach((term, i) => {
+        let nums = [], vars = [];
+        term.forEach(f => {
+            if (!isNaN(parseFloat(f))) nums.push(parseFloat(f));
+            else vars.push(f);
+        });
+        
+        if (nums.length > 0) {
+            let product = nums.reduce((a,b) => a*b, 1);
+            // If product is 1 and we have vars, drop the 1. Unless it's just "1".
+            if (product === 1 && vars.length > 0) {
+                 s.terms[i] = vars;
+            } else {
+                 s.terms[i] = [product.toString(), ...vars];
+            }
+        }
+    });
+
+    // 2. TERM CRUNCH: Combine like terms (e.g. 2x + 3x -> 5x, or 2 + 5 -> 7)
+    // We group terms by their "variable signature" (sorted string of vars)
+    let groups = {};
+    s.terms.forEach(term => {
+        let coeff = 1;
+        let vars = [];
+        
+        // Parse coefficient from first factor if it is a number
+        let first = term[0];
+        if (!isNaN(parseFloat(first))) {
+            coeff = parseFloat(first);
+            vars = term.slice(1);
+        } else if (first.startsWith('-') && isNaN(parseFloat(first))) {
+             // Handle "-x" -> coeff -1
+             // Not fully implemented in parser yet, but let's assume strict structure for now
+             vars = term;
+        } else {
+            vars = term;
+        }
+        
+        let sig = vars.sort().join('*') || 'CONST';
+        
+        if (!groups[sig]) groups[sig] = { coeff: 0, vars: vars };
+        groups[sig].coeff += coeff;
+    });
+    
+    // Rebuild terms from groups
+    let newTerms = [];
+    Object.values(groups).forEach(g => {
+        if (g.coeff === 0) return; // Terms cancelled out
+        
+        if (g.vars.length === 0) { // Constant
+            newTerms.push([g.coeff.toString()]);
+        } else {
+            if (g.coeff === 1) newTerms.push(g.vars);
+            else if (g.coeff === -1) newTerms.push(['-' + g.vars[0], ...g.vars.slice(1)]); // weak formatting for -x
+            else newTerms.push([g.coeff.toString(), ...g.vars]);
+        }
+    });
+    s.terms = newTerms;
+    
+    // 3. DENOMINATOR CRUNCH
+    if (s.den.length > 0) {
+        let dNums = [], dVars = [];
+        s.den.forEach(f => {
+            if(!isNaN(parseFloat(f))) dNums.push(parseFloat(f));
+            else dVars.push(f);
+        });
+        if(dNums.length > 0) {
+            let prod = dNums.reduce((a,b)=>a*b, 1);
+            s.den = [prod.toString(), ...dVars];
+        }
+        if(s.den.length === 1 && s.den[0] === '1') s.den = [];
+    }
+    
+    // 4. FRACTION REDUCTION (Basic: if Num and Denom are both single integers)
+    if (s.den.length === 1 && s.terms.length === 1 && s.terms[0].length === 1) {
+        let n = parseFloat(s.terms[0][0]);
+        let d = parseFloat(s.den[0]);
+        if (!isNaN(n) && !isNaN(d) && d !== 0) {
+            let res = n/d;
+            if (Number.isInteger(res)) {
+                s.terms = [[res.toString()]];
+                s.den = [];
+            }
+        }
+    }
+    
+    // Safety for empty sides
+    if (s.terms.length === 0 && s.den.length > 0) s.terms.push(['1']);
+  }
+
+  function save() {
+    // Limit history
+    if (state.history.length > 20) state.history.shift();
+    state.history.push(JSON.stringify({LHS: state.LHS, RHS: state.RHS}));
+  }
+  
+  function undo() {
+    if (state.history.length === 0) return;
+    const prev = JSON.parse(state.history.pop());
+    state.LHS = prev.LHS;
+    state.RHS = prev.RHS;
+    render();
+  }
+  
+  // Start
+  init();
+
+</script>
+</body>
+</html>
