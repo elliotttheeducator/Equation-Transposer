@@ -38,6 +38,7 @@
     input:focus { border-color: var(--accent); background: #252f45; }
     button { background: var(--accent); color: white; border: none; padding: 0 24px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s; white-space: nowrap; }
     button:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
     button.secondary { background: #475569; }
 
     .arena { flex: 1; display: flex; justify-content: center; align-items: center; font-size: 3.5rem; position: relative; background: #020617; }
@@ -73,7 +74,16 @@
     .negative-sign { font-weight: bold; margin-right: 2px; cursor: grab; color: inherit; padding: 0 4px; transition: 0.2s; border-radius: 4px; }
     .negative-sign.draggable:hover { background: rgba(99, 102, 241, 0.25); color: #a5b4fc; box-shadow: 0 0 0 1px var(--accent); }
 
-    #toast { position: fixed; bottom: 40px; left: 50%; transform: translate(-50%, 20px); background: var(--err); color: white; padding: 12px 24px; border-radius: 50px; opacity: 0; transition: 0.3s; pointer-events: none; font-weight: 600; z-index: 1000; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+    /* Fun Toast */
+    #toast { 
+        position: fixed; bottom: 40px; left: 50%; transform: translate(-50%, 20px); 
+        background: #1e293b; color: #f8fafc; padding: 12px 24px; border-radius: 50px; 
+        border: 2px solid var(--err);
+        opacity: 0; transition: 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+        pointer-events: none; font-weight: 600; z-index: 1000; 
+        box-shadow: 0 10px 20px rgba(0,0,0,0.5); 
+        display: flex; align-items: center; gap: 8px;
+    }
     #toast.show { opacity: 1; transform: translate(-50%, 0); }
     .ghost { position: fixed; pointer-events: none; z-index: 9999; background: #1e293b; padding: 10px 20px; border-radius: 8px; border: 2px solid var(--accent); font-size: 2.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
   </style>
@@ -120,7 +130,7 @@
 <div class="app-container">
   <div class="ui">
     <div class="input-group">
-      <input id="eqInput" value="-x = 5">
+      <input id="eqInput" value="3x^2 + 5 = 32">
       <button onclick="engine.load()">Load Equation</button>
       <button class="secondary" onclick="engine.undo()">Undo</button>
     </div>
@@ -133,7 +143,7 @@
   </div>
 </div>
 
-<div id="toast">Error</div>
+<div id="toast"><span>⚠️</span> <span id="toastMsg">Error</span></div>
 
 <script>
 // --- CLASSES ---
@@ -152,7 +162,7 @@ class AlgebraEngine {
 
   load() {
     const rawInput = document.getElementById('eqInput').value;
-    const procInput = rawInput.replace(/sqrt\(([^)]+)\)/g, '($1)^(1/2)'); // Pre-process Sqrt
+    const procInput = rawInput.replace(/sqrt\(([^)]+)\)/g, '($1)^(1/2)');
     
     const [l, r] = procInput.split('=');
     this.state.lhs = this.parseExpression(l);
@@ -161,8 +171,6 @@ class AlgebraEngine {
     this.simplifyStep();
     this.save();
     this.render();
-    
-    // Auto scroll to arena on load
     document.querySelector('.app-container').scrollIntoView({ behavior: 'smooth' });
   }
 
@@ -287,6 +295,29 @@ class AlgebraEngine {
     return false;
   }
 
+  // --- FUN ERROR MESSAGES ---
+  getLockReason(node, path, sideRoot) {
+    const parent = path.length > 1 ? path[path.length - 2] : null;
+    
+    if (sideRoot.type === 'add') {
+         // Deep inside a term
+         return "🧅 Peel the Onion! Move the outer +/- terms first.";
+    }
+    if (sideRoot.type === 'mult') {
+         if (parent.type === 'div') return "🔽 Trapped! Move the denominator first.";
+         if (parent.type === 'pow') return "🔒 Locked! Remove the exponent/root first.";
+         return "⛓️ Glued! Remove the coefficient first.";
+    }
+    if (sideRoot.type === 'div') {
+         if (node === sideRoot.num) return "🔽 Trapped! Move the denominator first.";
+    }
+    if (sideRoot.type === 'pow') {
+         if (node === sideRoot.base) return "☂️ Protected! Remove the power/root first.";
+    }
+    
+    return "🚫 Locked. Try moving something else!";
+  }
+
   move(node, targetSideName) {
     this.save();
     const sourceSideName = targetSideName === 'LHS' ? 'rhs' : 'lhs';
@@ -300,7 +331,7 @@ class AlgebraEngine {
     const isExponentDenominator = (grandparent && grandparent.type === 'pow' && parent === grandparent.exp);
     const isStandardDenominator = (parent.type === 'div' && node === parent.den && !isExponentDenominator);
 
-    // 1. EXTRACT FROM SOURCE
+    // 1. EXTRACT
     if (isExponentDenominator || isStandardDenominator) {
         if (grandparent) {
              if (grandparent.type === 'mult' || grandparent.type === 'add') {
@@ -325,13 +356,10 @@ class AlgebraEngine {
         this.state[sourceSideName] = remainingSource;
     }
 
-    // 2. INJECT INTO TARGET
+    // 2. INJECT
     let targetRoot = this.state[targetSideKey];
     
-    // Case: Dragging Negative Sign (-1)
     if (node instanceof Atom && node.val === '-1') {
-        // Divide target by -1. 
-        // Simplifier will fix 5 / -1 -> -5
         this.state[targetSideKey] = new DivNode(targetRoot, node);
     }
     else if (isExponentDenominator) {
@@ -371,21 +399,17 @@ class AlgebraEngine {
     this.render();
   }
 
-  // --- HELPER: AUTO FLIP ---
   checkAutoFlip() {
     const r = this.state.rhs;
     const l = this.state.lhs;
-    // If RHS is simple var and LHS is number or expression, flip.
     const isRhsVar = (r instanceof Atom && isNaN(parseFloat(r.val))); 
     const isLhsNotVar = !(l instanceof Atom && isNaN(parseFloat(l.val))); 
-    
     if (isRhsVar && isLhsNotVar) {
         this.state.rhs = l;
         this.state.lhs = r;
     }
   }
 
-  // --- SIMPLIFIER ---
   simplifyStep() {
     this.state.lhs = this.simplifyNode(this.state.lhs);
     this.state.rhs = this.simplifyNode(this.state.rhs);
@@ -429,7 +453,7 @@ class AlgebraEngine {
     }
 
     if (node.type === 'div') {
-        // FIX: Handle division by -1 (x / -1 -> -1 * x)
+        // FIX: x / -1 -> -1 * x
         if (node.den instanceof Atom && node.den.val === '-1') {
              return new OpNode('mult', [new Atom('-1'), node.num]);
         }
@@ -463,7 +487,12 @@ class AlgebraEngine {
     el.className = `node ${isMovable ? 'draggable' : 'locked'}`;
     el.id = node.id;
     if (isMovable) el.onmousedown = (e) => { e.stopPropagation(); this.startDrag(e, movableNode, sideName); };
-    else el.onmousedown = (e) => { e.stopPropagation(); this.toast("Locked"); };
+    else el.onmousedown = (e) => { 
+        e.stopPropagation(); 
+        // Use path to get specific error
+        const reason = this.getLockReason(node, path, sideRoot);
+        this.toast(reason); 
+    };
 
     let needsParen = false;
     if (node.type === 'add' && (parentType === 'mult' || parentType === 'pow')) needsParen = true;
@@ -487,7 +516,6 @@ class AlgebraEngine {
     }
     else if (node.type === 'mult') {
         node.children.forEach((c, i) => {
-            // RENDER DRAGGABLE MINUS
             if (c instanceof Atom && c.val === '-1' && i === 0) {
                 const isNegMovable = this.checkMove(c, this.findPath(sideRoot, c.id), sideRoot);
                 const sign = document.createElement('div'); 
@@ -525,7 +553,7 @@ class AlgebraEngine {
                 if (isMovable) {
                     this.startDrag(e, node.exp.den, sideName); 
                 } else {
-                    this.toast("Isolate Root"); 
+                    this.toast("🔒 Locked! Isolate the root first."); 
                 }
             };
             
@@ -587,7 +615,13 @@ class AlgebraEngine {
 
   save() { this.history.push(JSON.stringify(this.state)); }
   flip() { this.save(); [this.state.lhs, this.state.rhs] = [this.state.rhs, this.state.lhs]; this.render(); }
-  toast(msg) { const t = document.getElementById('toast'); t.innerText = msg; t.className = 'show'; setTimeout(() => t.className = '', 2500); }
+  toast(msg) { 
+      const t = document.getElementById('toast'); 
+      const m = document.getElementById('toastMsg');
+      m.innerText = msg; 
+      t.className = 'show'; 
+      setTimeout(() => t.className = '', 2500); 
+  }
 }
 
 const engine = new AlgebraEngine();
